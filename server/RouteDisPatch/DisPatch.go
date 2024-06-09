@@ -2,8 +2,10 @@ package RouteDisPatch
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"reflect"
 	"runtime"
 )
 
@@ -24,10 +26,44 @@ func InitHandler() *ServerHandler {
 	server := &ServerHandler{Routes: route}
 	return server
 }
+func newReqParam(param interface{}) interface{} {
+	// 获取输入接口的反射值
+	val := reflect.ValueOf(param)
+
+	// 检查是否为非空指针且指向一个结构体
+	if val.Kind() == reflect.Ptr && !val.IsNil() && val.Elem().Kind() == reflect.Struct {
+		// 获取指针指向的结构体的实际类型
+		elemType := val.Elem().Type()
+
+		// 创建目标类型的实例
+		result := reflect.New(elemType).Elem()
+		return result.Addr().Interface()
+	}
+	panic("you have send an invalid value")
+	return nil
+}
 
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	handler := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
-	handler(w, r)
+	route := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
+	if route.RequestParam == nil {
+		route.Handler(w, &Request{Request: r})
+	} else {
+		all, err := io.ReadAll(r.Body)
+		if err != nil {
+			return
+		}
+		data := newReqParam(route.RequestParam)
+		err = json.Unmarshal(all, data)
+		if err != nil {
+			return
+		}
+		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition)
+		route.Handler(w, &Request{
+			Request: r,
+			Param:   param,
+		})
+
+	}
 	defer func() {
 		errors := recover()
 		if errors != nil {

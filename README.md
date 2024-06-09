@@ -9,7 +9,7 @@
 1. 路径支持正则匹配以及 * 匹配和 ** 匹配
 2. 请求报错捕捉JSON输出
 3. 支持自定义签名证书
-
+4. 根据request结构体自动注入内容,支持自定义request位置和默认值以及参数重命名
 ## 快速开始
 
 1. 引入:
@@ -36,6 +36,10 @@ fmt.Println(r.Proto)
 newServer.StartServer()
 }
 ```
+
+3. 使用参考
+
+main.go中内容
 
 ## TODO
 
