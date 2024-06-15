@@ -1,8 +1,16 @@
-# QuicFrameWork
+# QuickFrameWork
 
 兼容Http1-1和Http2的框架，支持Http1-1,Http2,Http3的请求
 
 默认可自签名证书(ESDA)
+
+## 优点:
+1. 对于高并发场景下处理更快
+> 测试内容请移步测试文档:
+> 
+> [测试文档](test.md)
+
+2. 根据request结构体自动注入内容,支持自定义request位置和默认值以及参数重命名
 
 ## 目前支持:
 
@@ -15,7 +23,7 @@
 1. 引入:
 
 ```bash
-go get github.com/wangshiben/QuicFrameWork
+go get github.com/wangshiben/QuickFrameWork
 ```
 
 2. 使用

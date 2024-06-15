@@ -17,7 +17,7 @@ type TestStruct struct {
 
 func main() {
 	//可信的证书
-	newServer := server.NewServer("", "", ":4445")
+	newServer := server.NewServer("cert.pem", "cert.key", ":4445")
 	// 或: newServer := server.NewServer("", "", ":4445")使用自签名证书
 	// /bck/
 	newServer.Route.AddHttpHandler("/bck/**", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
@@ -31,6 +31,7 @@ func main() {
 		fmt.Fprintf(w, "欢迎访问http3 POST页面")
 		fmt.Println(r.Proto)
 	})
+	//默认参数位置在Body中
 	newServer.Route.AddBodyParamHandler("/temp/**", http.MethodPost, &TestStruct{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		testStruct := r.Param.(*TestStruct)
 		fmt.Println(*testStruct)
