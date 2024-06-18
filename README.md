@@ -23,7 +23,7 @@
 1. 引入:
 
 ```bash
-go get github.com/wangshiben/QuickFrameWork
+go get github.com/wangshiben/QuicFrameWork
 ```
 
 2. 使用
