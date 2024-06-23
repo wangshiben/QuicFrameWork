@@ -19,19 +19,20 @@ func (p *ParamLocation) RequestParam() string {
 }
 
 type Route struct {
-	method               string      //请求方法
-	path                 string      //当前的路径
-	Handler              HttpHandle  //当前路径的处理函数
-	Filter               HttpFilter  //当前路径的过滤函数
-	NextRoute            []*Route    //下一个路径
-	RequestParam         interface{} //接收参数类型
-	DefaultParamPosition string      //默认接收参数位置
+	method               string       //请求方法
+	path                 string       //当前的路径
+	Handler              HttpHandle   //当前路径的处理函数
+	Filter               []HttpFilter //当前路径的过滤函数
+	NextRoute            []*Route     //下一个路径
+	RequestParam         interface{}  //接收参数类型
+	DefaultParamPosition string       //默认接收参数位置
 	Index                map[string]int
 }
 
 type GetHttpParam[T any] func(r *http.Request) T
-type HttpFilter func(w http.ResponseWriter, r *http.Request, next HttpHandle) bool
+type HttpFilter func(w http.ResponseWriter, r *Request, next Next)
 type HttpHandle func(w http.ResponseWriter, r *Request)
+type NextFunc func(w http.ResponseWriter, r *http.Request, next []HttpFilter, nextFunc NextFunc)
 
 type Request struct {
 	*http.Request
@@ -84,12 +85,13 @@ func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}
 	r.addHandler(path, HttpMethod, param, header, handler)
 }
 
-func (r *Route) GetHttpHandler(path, HttpMethod string) *Route {
+func (r *Route) GetHttpHandler(path, HttpMethod string) (*Route, []HttpFilter) {
 	if path[0] == '/' {
 		runes := []rune(path)
 		path = string(runes[1:])
 	}
-	return r.GetHandler(path, HttpMethod)
+	FilterChain := make([]HttpFilter, 0)
+	return r.GetHandler(path, HttpMethod), r.getFilter(path, FilterChain)
 }
 
 //func (r *Route) AddHttpFilter(path string, Filter HttpFilter) {

@@ -42,11 +42,38 @@ func newReqParam(param interface{}) interface{} {
 	panic("you have send an invalid value")
 	return nil
 }
+func (h *ServerHandler) httpHandler(w http.ResponseWriter, r *Request, route HttpHandle, FilterChain []HttpFilter) {
+	next := &Next{
+		chain:  FilterChain,
+		handle: route,
+		index:  0,
+	}
+	if len(FilterChain) != 0 {
+		FilterChain[0](w, r, *next)
+	}
+}
+
+type Next struct {
+	chain  []HttpFilter
+	handle HttpHandle
+	index  int
+}
+
+func (n *Next) Next(w http.ResponseWriter, r *Request) {
+	n.index += 1
+	if n.index >= len(n.chain) {
+		n.handle(w, r)
+	} else {
+		n.chain[n.index](w, r, *n)
+	}
+}
 
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	route := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
+	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
+	request := &Request{Request: r}
+
 	if route.RequestParam == nil {
-		route.Handler(w, &Request{Request: r})
+		h.httpHandler(w, request, route.Handler, filterChain)
 	} else {
 		all, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -58,10 +85,8 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition)
-		route.Handler(w, &Request{
-			Request: r,
-			Param:   param,
-		})
+		request.Param = param
+		h.httpHandler(w, request, route.Handler, filterChain)
 
 	}
 	defer func() {
