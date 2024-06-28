@@ -5,6 +5,7 @@ import (
 	"github.com/wangshiben/QuicFrameWork/server"
 	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/server/RouteHand"
+	"github.com/wangshiben/QuicFrameWork/server/filter/cors"
 	"net/http"
 	"reflect"
 )
@@ -53,5 +54,16 @@ func main() {
 		testStruct := r.Param.(*TestStruct)
 		fmt.Println(*testStruct)
 	})
+
+	//添加跨域功能
+	newServer.AddFilter("/bck/**", cors.CORS(
+		cors.CORSConfig{
+			AllowOrigins:     []string{"*"},
+			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
+			AllowCredentials: false,
+			MaxAge:           86400,
+		}))
+
 	newServer.StartServer()
 }
