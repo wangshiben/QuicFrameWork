@@ -39,6 +39,12 @@ type Request struct {
 	Param interface{}
 }
 
+func NewRequest(r *http.Request) *Request {
+	return &Request{
+		Request: r,
+	}
+}
+
 func pageNotFund() *Route {
 	rou := Route{
 		Handler: func(w http.ResponseWriter, r *Request) {
