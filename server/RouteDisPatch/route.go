@@ -127,7 +127,7 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 	}
 	//进行正则匹配
 	for _, route := range r.NextRoute {
-		if route.method != HttpMethod {
+		if route.NextRoute == nil && route.method != HttpMethod {
 			continue
 		}
 		switch route.path {
@@ -136,6 +136,8 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 		case "**":
 			return route
 		}
+		//TODO:修改匹配模式
+		//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
 		compile, err := regexp.Compile(route.path)
 		if err != nil {
 			continue
