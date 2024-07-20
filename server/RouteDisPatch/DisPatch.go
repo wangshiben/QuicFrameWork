@@ -50,6 +50,8 @@ func (h *ServerHandler) httpHandler(w http.ResponseWriter, r *Request, route Htt
 	}
 	if len(FilterChain) != 0 {
 		FilterChain[0](w, r, *next)
+	} else {
+		route(w, r)
 	}
 }
 

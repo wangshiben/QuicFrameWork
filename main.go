@@ -5,7 +5,6 @@ import (
 	"github.com/wangshiben/QuicFrameWork/server"
 	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/server/RouteHand"
-	"github.com/wangshiben/QuicFrameWork/server/filter/cors"
 	"net/http"
 	"reflect"
 )
@@ -48,7 +47,18 @@ func main() {
 		param := *q.Param
 		fmt.Println(param)
 	})
-
+	newServer.AddHttpHandler("/pathTest/{name:2}", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		fmt.Fprintf(w, "欢迎访问Name:2")
+	})
+	newServer.AddHttpHandler("/pathTest/{name:2}/111", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		fmt.Fprintf(w, "欢迎访问Name:2/1")
+	})
+	newServer.AddHttpHandler("/pathTest/{telNet}/{name}/{names}", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		fmt.Fprintf(w, "欢迎访问telNetTest")
+	})
+	newServer.AddHttpHandler("/pathTest/*", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		fmt.Fprintf(w, "欢迎访问Name:*")
+	})
 	//默认参数位置在Body中
 	newServer.Route.AddBodyParamHandler("/temp/**", http.MethodPost, &TestStruct{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		testStruct := r.Param.(*TestStruct)
@@ -56,13 +66,13 @@ func main() {
 	})
 
 	//添加跨域功能
-	newServer.CORS("/bck/**", cors.CORSConfig{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
-		AllowCredentials: false,
-		MaxAge:           86400,
-	})
+	//newServer.CORS("/bck/**", cors.CORSConfig{
+	//	AllowOrigins:     []string{"*"},
+	//	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	//	AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
+	//	AllowCredentials: false,
+	//	MaxAge:           86400,
+	//})
 
 	newServer.StartServer()
 }

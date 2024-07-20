@@ -65,7 +65,9 @@ func (r *Route) getFilter(path string, FilterChain []HttpFilter) []HttpFilter {
 		switch item.path {
 		case "*":
 			FilterChain = append(FilterChain, item.Filter...)
-			FilterChain = append(FilterChain, item.getFilter(routes[1], FilterChain)...)
+			if len(routes) > 1 {
+				FilterChain = append(FilterChain, item.getFilter(routes[1], FilterChain)...)
+			}
 		case "**":
 			FilterChain = append(FilterChain, item.Filter...)
 			return append(FilterChain, tempChains...)

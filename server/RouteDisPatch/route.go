@@ -2,9 +2,7 @@ package RouteDisPatch
 
 import (
 	"fmt"
-	"log"
 	"net/http"
-	"regexp"
 	"strings"
 )
 
@@ -27,6 +25,7 @@ type Route struct {
 	RequestParam         interface{}  //接收参数类型
 	DefaultParamPosition string       //默认接收参数位置
 	Index                map[string]int
+	Status               int //状态码,用于匹配错误路径
 }
 
 type GetHttpParam[T any] func(r *http.Request) T
@@ -43,20 +42,6 @@ func NewRequest(r *http.Request) *Request {
 	return &Request{
 		Request: r,
 	}
-}
-
-func pageNotFund() *Route {
-	rou := Route{
-		Handler: func(w http.ResponseWriter, r *Request) {
-			w.Header().Set("Content-Type", "text/plain") // 设置合适的Content-Type
-			w.WriteHeader(http.StatusNotFound)           // 先设置状态码
-			if _, err := w.Write([]byte("404 page not found")); err != nil {
-				log.Printf("Error writing response: %v", err)
-			}
-			//fmt.Println("Page Not Found") // 日志或调试信息，不应影响HTTP响应
-		},
-	}
-	return &rou
 }
 
 func pageError() HttpHandle {
@@ -110,6 +95,12 @@ func (r *Route) GetHttpHandler(path, HttpMethod string) (*Route, []HttpFilter) {
 
 func (r *Route) GetHandler(path, HttpMethod string) *Route {
 	index, exist := 0, false
+	if len(path) == 0 {
+		handler := r.Handler
+		if handler != nil {
+			return r
+		}
+	}
 	routes := strings.SplitN(path, "/", 2)
 	if len(routes) == 1 {
 		index, exist = r.Index[r.getMapKey(routes[0], HttpMethod)]
@@ -126,27 +117,98 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 		}
 	}
 	//进行正则匹配
-	for _, route := range r.NextRoute {
-		if route.NextRoute == nil && route.method != HttpMethod {
-			continue
+	if len(routes) > 1 {
+		for _, route := range r.NextRoute {
+			if route.NextRoute == nil && route.method != HttpMethod {
+				continue
+			}
+			switch route.path {
+			case "*":
+				return route.GetHandler(routes[1], HttpMethod)
+			case "**":
+				return route
+			}
+			//TODO:修改匹配模式
+			//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
+			//compile, err := regexp.Compile(route.path)
+			//if err != nil {
+			//	continue
+			//}
+			//match := compile.FindString(routes[1])
+			//if len(match) != 0 {
+			//	return route.GetHandler(routes[1], HttpMethod)
+			//}
+			_, forceStepCount, _ := getStrRegexpRes(route.path)
+			if forceStepCount == 1 {
+				handler := route.GetHandler(routes[1], HttpMethod)
+				if handler.Status == http.StatusNotFound {
+					continue
+				} else {
+					return handler
+				}
+			} else if forceStepCount > 0 {
+				//TODO:匹配修改
+				if len(routes) == 1 {
+					continue
+				}
+				netRoutes := strings.SplitN(routes[1], "/", forceStepCount)
+				if len(netRoutes)+1 == forceStepCount { //表明匹配到{xxx:num}结尾的Routes
+					return route
+				} else {
+					handler := route.GetHandler(netRoutes[len(netRoutes)-1], HttpMethod)
+					if handler.Status == http.StatusNotFound {
+						continue
+					} else {
+						return handler
+					}
+				}
+
+			} else {
+				continue
+			}
 		}
-		switch route.path {
-		case "*":
-			return route.GetHandler(routes[1], HttpMethod)
-		case "**":
-			return route
-		}
-		//TODO:修改匹配模式
-		//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
-		compile, err := regexp.Compile(route.path)
-		if err != nil {
-			continue
-		}
-		match := compile.FindString(routes[1])
-		if len(match) != 0 {
-			return route.GetHandler(routes[1], HttpMethod)
+	} else {
+		for _, route := range r.NextRoute {
+			if route.NextRoute == nil && route.method != HttpMethod {
+				continue
+			}
+			switch route.path {
+			case "*":
+				if route.Handler != nil {
+					return route
+				} else {
+					return pageNotFund()
+				}
+			case "**":
+				if route.Handler != nil {
+					return route
+				} else {
+					return pageNotFund()
+				}
+			}
+			//TODO:修改匹配模式
+			//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
+			//compile, err := regexp.Compile(route.path)
+			//if err != nil {
+			//	continue
+			//}
+			//match := compile.FindString(routes[1])
+			//if len(match) != 0 {
+			//	return route.GetHandler(routes[1], HttpMethod)
+			//}
+			_, forceStepCount, _ := getStrRegexpRes(route.path)
+			if forceStepCount == 1 {
+				if route.Handler != nil {
+					return route
+				} else {
+					continue
+				}
+			} else {
+				continue
+			}
 		}
 	}
+
 	return pageNotFund()
 
 }
