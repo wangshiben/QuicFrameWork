@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 type Parse interface {
@@ -24,7 +25,9 @@ const (
 	reqParam = "param"
 )
 
-func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocation string) interface{} {
+func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocation, RoutePath string) interface{} {
+	requestURI := r.URL.Path //请求路径
+	pathMap := getPathMap(RoutePath, requestURI)
 	// 获取输入接口的反射值
 	val := reflect.ValueOf(i)
 
@@ -53,11 +56,19 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 			}
 			value := ""
 			defaultVal := tags.Get(defaultValue)
-			switch positionTag { //获取到值
+			switch positionTag { //获取到需要注入的参数的位置
 			case reqParam:
 				value = copyFromRequestParam(r, paramName)
 			case header:
 				value = copyFromHeader(r, paramName)
+			default: //Path传参
+				vals := pathMap[paramName]
+				for index, str := range vals {
+					value += str
+					if index < len(vals)-1 {
+						value += "/"
+					}
+				}
 			}
 			if len(value) == 0 {
 				value = defaultVal
@@ -97,6 +108,7 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 					continue
 				}
 			}
+
 		}
 
 		// 返回新实例的地址，转换为interface{}
@@ -106,6 +118,34 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 	// 不满足条件时，返回nil或根据业务逻辑进行错误处理
 	return nil
 }
+
+// OriginPath: 注册进route的原始路径
+// RequestPath: 实际请求路径
+func getPathMap(OriginPath, RequestPath string) map[string][]string { //匹配算法，要求:前缀必须要一样，否则则没有意义
+	//TODO:路径匹配赋值出错首先排查这里
+	//map: key-> {name}中的name
+	// value -> 对应到requestPath中的Path
+	mapPath := make(map[string][]string)
+	if len(OriginPath) == 0 || len(RequestPath) == 0 {
+		return mapPath
+	}
+	OriginPath = formatPath(OriginPath)
+	RequestPath = formatPath(RequestPath)
+	OriginPaths := strings.Split(OriginPath, "/")
+	RequestPaths := strings.Split(RequestPath, "/")
+	RequestIndex := 0
+	for _, path := range OriginPaths {
+		name, step, _ := getStrRegexpRes(path)
+		if step <= 0 {
+			RequestIndex++
+			continue
+		}
+		mapPath[copyNameToLitter(name)] = RequestPaths[RequestIndex : RequestIndex+step]
+		RequestIndex += step
+	}
+	return mapPath
+}
+
 func copyFromRequestParam(r *http.Request, ParamName string) string {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {

@@ -1,6 +1,7 @@
 package RouteDisPatch
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -16,4 +17,6 @@ func TestRoute_AddHandler(t *testing.T) {
 	//getHandler := route.GetHttpHandler("/a/b/c/d")
 	//httpHandler := route.GetHttpHandler("/a/b/c/e")
 	//print(handler, getHandler, httpHandler)
+	pathMap := getPathMap("/m/{name}/1", "/a/b/1/c/d")
+	fmt.Println(pathMap)
 }

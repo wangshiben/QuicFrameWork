@@ -86,7 +86,7 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition)
+		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition, route.OriginPath)
 		request.Param = param
 		h.httpHandler(w, request, route.Handler, filterChain)
 

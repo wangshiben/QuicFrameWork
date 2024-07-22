@@ -25,7 +25,8 @@ type Route struct {
 	RequestParam         interface{}  //接收参数类型
 	DefaultParamPosition string       //默认接收参数位置
 	Index                map[string]int
-	Status               int //状态码,用于匹配错误路径
+	Status               int    //状态码,用于匹配错误路径
+	OriginPath           string //原始路径,用于参数注入
 }
 
 type GetHttpParam[T any] func(r *http.Request) T
@@ -53,12 +54,12 @@ func pageError() HttpHandle {
 }
 func (r *Route) AddHttpHandler(path, HttpMethod string, handler HttpHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, nil, "", handler)
+	r.addHandler(path, HttpMethod, path, nil, "", handler)
 }
 
 func (r *Route) AddOriginHandler(path, HttpMethod string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, paramPointer, defaultPosition, handler)
+	r.addHandler(path, HttpMethod, path, paramPointer, defaultPosition, handler)
 }
 func formatPath(path string) string {
 	if path[0] == '/' {
@@ -69,11 +70,11 @@ func formatPath(path string) string {
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, param, body, handler)
+	r.addHandler(path, HttpMethod, path, param, body, handler)
 }
 func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, param, header, handler)
+	r.addHandler(path, HttpMethod, path, param, header, handler)
 }
 
 func (r *Route) GetHttpHandler(path, HttpMethod string) (*Route, []HttpFilter) {
@@ -216,7 +217,7 @@ func (r *Route) getMapKey(path, Method string) string {
 	return fmt.Sprintf("%s?%s", path, Method)
 }
 
-func (r *Route) addHandler(path, HttpMethod string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
+func (r *Route) addHandler(path, HttpMethod, OriginPath string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
 	//路径:  /a/b/c/d
 	routes := strings.SplitN(path, "/", 2)
 	if len(routes) == 1 { //最终的子路由
@@ -226,16 +227,17 @@ func (r *Route) addHandler(path, HttpMethod string, paramPointer interface{}, de
 			method:               HttpMethod,
 			RequestParam:         paramPointer,
 			DefaultParamPosition: defaultPosition,
+			OriginPath:           OriginPath,
 		})
 		r.Index[r.getMapKey(routes[0], HttpMethod)] = len(r.NextRoute) - 1
 	} else {
 		nextIndex, exist := r.Index[routes[0]]
 		if exist {
-			r.NextRoute[nextIndex].addHandler(routes[1], HttpMethod, paramPointer, defaultPosition, handler)
+			r.NextRoute[nextIndex].addHandler(routes[1], HttpMethod, path, paramPointer, defaultPosition, handler)
 		} else {
 			r.NextRoute = append(r.NextRoute, &Route{path: routes[0], NextRoute: make([]*Route, 0), Index: make(map[string]int)})
 			r.Index[routes[0]] = len(r.NextRoute) - 1
-			r.NextRoute[len(r.NextRoute)-1].addHandler(routes[1], HttpMethod, paramPointer, defaultPosition, handler)
+			r.NextRoute[len(r.NextRoute)-1].addHandler(routes[1], HttpMethod, path, paramPointer, defaultPosition, handler)
 		}
 	}
 }
