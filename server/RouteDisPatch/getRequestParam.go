@@ -161,5 +161,8 @@ func copyFromHeader(r *http.Request, ParamName string) string {
 }
 
 func copyNameToLitter(name string) string { //首字母小写
-	return string(name[0]+32) + name[1:]
+	if name[0] >= 'A' && name[0] <= 'Z' {
+		return string(name[0]+32) + name[1:]
+	}
+	return name
 }

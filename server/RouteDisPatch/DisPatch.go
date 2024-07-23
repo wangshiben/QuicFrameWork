@@ -83,9 +83,9 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		data := newReqParam(route.RequestParam)
 		err = json.Unmarshal(all, data)
-		if err != nil {
-			return
-		}
+		//if err != nil {
+		//	return
+		//}
 		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition, route.OriginPath)
 		request.Param = param
 		h.httpHandler(w, request, route.Handler, filterChain)

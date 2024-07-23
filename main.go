@@ -15,6 +15,9 @@ type TestStruct struct {
 	Header       string `quickLoc:"header"`
 	Age          int    `quickLoc:"param"`
 }
+type TestPathParam struct {
+	Name string
+}
 
 func main() {
 	//可信的证书
@@ -63,6 +66,9 @@ func main() {
 	newServer.Route.AddBodyParamHandler("/temp/**", http.MethodPost, &TestStruct{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		testStruct := r.Param.(*TestStruct)
 		fmt.Println(*testStruct)
+	})
+	newServer.Route.AddBodyParamHandler("/test/{name:3}", http.MethodGet, &TestPathParam{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		fmt.Println(r.Param.(*TestPathParam).Name)
 	})
 
 	//添加跨域功能

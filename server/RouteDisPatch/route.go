@@ -127,7 +127,12 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 			case "*":
 				return route.GetHandler(routes[1], HttpMethod)
 			case "**":
-				return route
+				if route.Handler != nil {
+					return route
+				} else {
+					continue
+				}
+
 			}
 			//TODO:修改匹配模式
 			//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
