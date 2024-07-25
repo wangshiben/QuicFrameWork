@@ -21,8 +21,9 @@ type TestPathParam struct {
 
 func main() {
 	//可信的证书
-	newServer := server.NewServer("cert.pem", "cert.key", ":4445")
+	//newServer := server.NewServer("cert.pem", "cert.key", ":4445")
 	// 或: newServer := server.NewServer("", "", ":4445")使用自签名证书
+	newServer := server.NewHttpServer(":4445")
 	// /bck/
 	newServer.AddHttpHandler("/bck/**", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		//param := r.Param
@@ -80,5 +81,6 @@ func main() {
 	//	MaxAge:           86400,
 	//})
 
-	newServer.StartServer()
+	//newServer.StartServer()
+	newServer.StartHttpSerer()
 }

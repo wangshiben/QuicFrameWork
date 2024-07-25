@@ -79,6 +79,11 @@ func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFu
 		previousHandler.ServeHTTP(w, r)
 	}
 }
+func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		previousHandler.ServeHTTP(w, r)
+	}
+}
 
 type tcpKeepAliveListener struct {
 	*net.TCPListener
@@ -138,6 +143,20 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	return s
 }
 
+func NewHttpServer(addr string) *Server {
+	fmt.Println("已启动http服务")
+	handler := RouteDisPatch.InitHandler()
+	s := &Server{
+		Server: &http.Server{
+			Addr:    addr,
+			Handler: handler,
+		},
+	}
+	s.Server.Handler = s.serveHttp(handler)
+	s.Route = handler.Routes
+	return s
+}
+
 func (s *Server) StartServer() {
 	pc, err := s.listenPacket()
 	if err != nil {
@@ -149,4 +168,16 @@ func (s *Server) StartServer() {
 		s.Serve(ln)
 	}()
 	s.ServePacket(pc)
+}
+func (s *Server) StartHttpSerer() {
+	//pc, err := s.listenPacket()
+	//if err != nil {
+	//	panic(err.Error())
+	//}
+	//ln, err := s.listen()
+	//if err != nil {
+	//	panic(err.Error())
+	//}
+	//s.Serve(ln)
+	s.Server.ListenAndServe()
 }
