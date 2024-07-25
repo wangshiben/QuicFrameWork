@@ -22,3 +22,11 @@ func (s *Server) CORS(path string, cconf ...cors.CORSConfig) {
 		s.AddFilter(path, cors.CORS(cors.DefaultCORSConfig()))
 	}
 }
+
+func (s *Server) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler RouteDisPatch.HttpHandle) {
+	s.Route.AddBodyParamHandler(path, HttpMethod, param, handler)
+}
+
+func (s *Server) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler RouteDisPatch.HttpHandle) {
+	s.Route.AddHeaderParamHandler(path, HttpMethod, param, handler)
+}

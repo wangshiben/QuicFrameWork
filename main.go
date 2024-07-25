@@ -46,8 +46,8 @@ func main() {
 		next.Next(w, r)
 		fmt.Println("拦截请求结束")
 	})
-	RouteHand.GetAutowired(newServer, "/bck/**", func(q *RouteHand.QuickFrameWork[TestStruct]) {
-		param := *q.Param
+	RouteHand.PostAutowired(newServer, "/mmm/bck/**", func(q *RouteHand.QuickFrameWork[TestStruct]) {
+		param := q.Param
 		fmt.Println(param)
 	})
 	newServer.AddHttpHandler("/pathTest/{name:2}", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {

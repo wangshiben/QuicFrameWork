@@ -70,7 +70,7 @@ func formatPath(path string) string {
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, path, param, body, handler)
+	r.addHandler(path, HttpMethod, path, param, reqParam, handler)
 }
 func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
 	path = formatPath(path)

@@ -9,65 +9,37 @@ import (
 type QuickFrameWork[T interface{}] struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
-	Param   *T
+	Param   T
 }
 
 type Request[T any] func(work *QuickFrameWork[T])
 
-func GetAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
-	server.Route.AddHeaderParamHandler(path, http.MethodGet, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+func PathAutowired[T interface{}](server *server.Server, path, method string, request Request[T]) {
+	server.Route.AddBodyParamHandler(path, method, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		Param := r.Param.(*T)
 		q := QuickFrameWork[T]{
 			Writer:  w,
 			Request: r.Request,
-			Param:   Param,
+			Param:   *Param,
 		}
 		request(&q)
 	})
 }
+
+func GetAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
+	PathAutowired(server, path, http.MethodGet, request)
+}
 func PostAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
-	server.Route.AddHeaderParamHandler(path, http.MethodPost, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
-		Param := r.Param.(*T)
-		q := QuickFrameWork[T]{
-			Writer:  w,
-			Request: r.Request,
-			Param:   Param,
-		}
-		request(&q)
-	})
+	PathAutowired(server, path, http.MethodPost, request)
 }
 
 func PutAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
-	server.Route.AddHeaderParamHandler(path, http.MethodPut, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
-		Param := r.Param.(*T)
-		q := QuickFrameWork[T]{
-			Writer:  w,
-			Request: r.Request,
-			Param:   Param,
-		}
-		request(&q)
-	})
+	PathAutowired(server, path, http.MethodPut, request)
 }
 func DeleteAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
-	server.Route.AddHeaderParamHandler(path, http.MethodDelete, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
-		Param := r.Param.(*T)
-		q := QuickFrameWork[T]{
-			Writer:  w,
-			Request: r.Request,
-			Param:   Param,
-		}
-		request(&q)
-	})
+	PathAutowired(server, path, http.MethodDelete, request)
 }
 
 func PatchAutowired[T interface{}](server *server.Server, path string, request Request[T]) {
-	server.Route.AddHeaderParamHandler(path, http.MethodPatch, new(T), func(w http.ResponseWriter, r *RouteDisPatch.Request) {
-		Param := r.Param.(*T)
-		q := QuickFrameWork[T]{
-			Writer:  w,
-			Request: r.Request,
-			Param:   Param,
-		}
-		request(&q)
-	})
+	PathAutowired(server, path, http.MethodPatch, request)
 }
