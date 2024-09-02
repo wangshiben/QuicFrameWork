@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/server/Session"
+	"github.com/wangshiben/QuicFrameWork/server/Session/defaultSessionImp"
 	"log"
 	"net"
 	"net/http"
@@ -15,12 +18,19 @@ import (
 
 // Server is the HTTP server implementation.
 type Server struct {
-	Server     *http.Server
-	quicServer *http3.Server
-	listener   net.Listener
-	lock       sync.Mutex
-	Route      *RouteDisPatch.Route
+	Server       *http.Server
+	quicServer   *http3.Server
+	listener     net.Listener
+	lock         sync.Mutex
+	Route        *RouteDisPatch.Route
+	Session      Session.ServerSession
+	generateFunc Session.GenerateItemInterFace
 }
+
+const (
+	InitSessionFunc = "_initSession"
+	GetSession      = "_getSession"
+)
 
 // listen creates an active listener for s that can be
 // used to serve requests.
@@ -72,15 +82,23 @@ func (s *Server) ServePacket(pc net.PacketConn) error {
 	}
 	return nil
 }
+func (s *Server) initContext(parent context.Context) context.Context {
+	child := withParent(parent)
+	child.SetValue(GetSession, s.Session)
+	child.SetValue(InitSessionFunc, s.generateFunc)
+	return child
+}
 
 func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.quicServer.SetQUICHeaders(w.Header())
+		r = r.WithContext(s.initContext(r.Context()))
 		previousHandler.ServeHTTP(w, r)
 	}
 }
 func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.WithContext(s.initContext(r.Context()))
 		previousHandler.ServeHTTP(w, r)
 	}
 }
@@ -134,6 +152,8 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 			Addr:      addr,
 			TLSConfig: config,
 		},
+		generateFunc: defaultSessionImp.NewMemoItemInterFace,
+		Session:      defaultSessionImp.NewMemoServerSession(),
 	}
 	handler := RouteDisPatch.InitHandler()
 	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: handler}
@@ -180,4 +200,7 @@ func (s *Server) StartHttpSerer() {
 	//}
 	//s.Serve(ln)
 	s.Server.ListenAndServe()
+}
+func (s *Server) SetGenerateItemInterFace(generateFunc Session.GenerateItemInterFace) {
+	s.generateFunc = generateFunc
 }

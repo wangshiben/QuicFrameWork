@@ -72,7 +72,10 @@ func (n *Next) Next(w http.ResponseWriter, r *Request) {
 
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
-	request := &Request{Request: r}
+	request := &Request{
+		Request: r,
+		writer:  w,
+	}
 
 	if route.RequestParam == nil {
 		h.httpHandler(w, request, route.Handler, filterChain)

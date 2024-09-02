@@ -38,7 +38,9 @@ func CORS(config CORSConfig) RouteDisPatch.HttpFilter {
 		if config.AllowCredentials {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ","))
+		if len(config.ExposeHeaders) != 0 {
+			w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ","))
+		}
 		w.Header().Set("Access-Control-Max-Age", strconv.Itoa(config.MaxAge))
 
 		// 如果是预检请求，直接返回204

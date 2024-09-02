@@ -34,17 +34,6 @@ type HttpFilter func(w http.ResponseWriter, r *Request, next Next)
 type HttpHandle func(w http.ResponseWriter, r *Request)
 type NextFunc func(w http.ResponseWriter, r *http.Request, next []HttpFilter, nextFunc NextFunc)
 
-type Request struct {
-	*http.Request
-	Param interface{}
-}
-
-func NewRequest(r *http.Request) *Request {
-	return &Request{
-		Request: r,
-	}
-}
-
 func pageError() HttpHandle {
 	return func(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Content-Type", "text/plain")  // 设置合适的Content-Type

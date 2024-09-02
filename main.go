@@ -80,7 +80,7 @@ func main() {
 	//	AllowCredentials: false,
 	//	MaxAge:           86400,
 	//})
-
+	newServer.CORS("/**")
 	newServer.StartServer()
 	//newServer.StartHttpSerer()//和StartServer()二选一
 }
