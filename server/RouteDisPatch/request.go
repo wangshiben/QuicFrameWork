@@ -1,11 +1,11 @@
 package RouteDisPatch
 
 import (
-	"fmt"
 	"github.com/google/uuid"
-	"github.com/wangshiben/QuicFrameWork/server"
 	"github.com/wangshiben/QuicFrameWork/server/Session"
+	"github.com/wangshiben/QuicFrameWork/server/consts"
 	"net/http"
+	"time"
 )
 
 const quicSessionName = "quickSession"
@@ -26,21 +26,35 @@ func (r *Request) GetSession() Session.ItemInterFace {
 		return nil
 	}
 	context := r.Context()
-	value := context.Value(server.GetSession)
-	initFunc := context.Value(server.InitSessionFunc).(Session.GenerateItemInterFace)
-	if value != nil {
-		sessionMap := value.(Session.ServerSession)
-		item := sessionMap.GetItem(cookie.Name)
+	value := context.Value(consts.GetSession)
+	initFunc := context.Value(consts.InitSessionFunc).(Session.GenerateItemInterFace)
+	sessionMap := value.(Session.ServerSession)
+	if cookie != nil {
+		item := sessionMap.GetItem(cookie.Value)
 		if item != nil {
 			return item
 		}
-		name, session := generateName(initFunc)
-		sessionMap.StoreSession(name, session)
-		cookieVal := fmt.Sprintf("%s=%s", quicSessionName, name)
-		r.writer.Header().Add("Set-Cookie", cookieVal)
-		return session
 	}
-	return initFunc()
+	name, session := generateName(initFunc)
+	sessionMap.StoreSession(name, session)
+	cookieIn := &http.Cookie{
+		Name:     quicSessionName,
+		Value:    name,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		MaxAge:   0,
+		Domain:   "localhost",
+		Expires:  time.Now().AddDate(0, 0, 30),
+	}
+	//r.writer.Header()["Set-Cookie"] = []string{cookieIn.String()}
+
+	r.writer.Header().Set("Set-Cookie", cookieIn.String())
+	r.session = session
+	//cookieVal := fmt.Sprintf("%s=%s;HttpOnly;SameSite=Lax", quicSessionName, name)
+	//r.writer.Header().Set("Set-Cookie", cookieVal)
+	return session
+	//return initFunc()
 
 }
 

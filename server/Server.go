@@ -8,6 +8,7 @@ import (
 	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/server/Session"
 	"github.com/wangshiben/QuicFrameWork/server/Session/defaultSessionImp"
+	"github.com/wangshiben/QuicFrameWork/server/consts"
 	"log"
 	"net"
 	"net/http"
@@ -28,8 +29,8 @@ type Server struct {
 }
 
 const (
-	InitSessionFunc = "_initSession"
-	GetSession      = "_getSession"
+	InitSessionFunc = consts.InitSessionFunc
+	GetSession      = consts.GetSession
 )
 
 // listen creates an active listener for s that can be
@@ -91,8 +92,8 @@ func (s *Server) initContext(parent context.Context) context.Context {
 
 func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.quicServer.SetQUICHeaders(w.Header())
 		r = r.WithContext(s.initContext(r.Context()))
+		s.quicServer.SetQUICHeaders(w.Header())
 		previousHandler.ServeHTTP(w, r)
 	}
 }
@@ -156,8 +157,9 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 		Session:      defaultSessionImp.NewMemoServerSession(),
 	}
 	handler := RouteDisPatch.InitHandler()
-	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: handler}
+	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
 	s.Server.Handler = s.wrapWithSvcHeaders(handler)
+	//s.quicServer.Handler=
 	s.Route = handler.Routes
 	// s.Server.Handler = s
 	return s

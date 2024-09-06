@@ -2,6 +2,7 @@ package RouteDisPatch
 
 import (
 	"encoding/json"
+	"github.com/wangshiben/QuicFrameWork/server/Writer"
 	"io"
 	"log"
 	"net/http"
@@ -76,9 +77,16 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Request: r,
 		writer:  w,
 	}
-
+	writer := Writer.NewWriter(w)
+	//request.GetSession()
+	defer func() {
+		_, err := writer.FinishWrite()
+		if err != nil {
+			return
+		}
+	}()
 	if route.RequestParam == nil {
-		h.httpHandler(w, request, route.Handler, filterChain)
+		h.httpHandler(writer, request, route.Handler, filterChain)
 	} else {
 		all, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -91,9 +99,10 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//}
 		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition, route.OriginPath)
 		request.Param = param
-		h.httpHandler(w, request, route.Handler, filterChain)
+		h.httpHandler(writer, request, route.Handler, filterChain)
 
 	}
+
 	defer func() {
 		errors := recover()
 		if errors != nil {
