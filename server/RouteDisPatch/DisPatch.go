@@ -73,11 +73,11 @@ func (n *Next) Next(w http.ResponseWriter, r *Request) {
 
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
+	writer := Writer.NewWriter(w)
 	request := &Request{
 		Request: r,
-		writer:  w,
+		writer:  writer,
 	}
-	writer := Writer.NewWriter(w)
 	//request.GetSession()
 	defer func() {
 		_, err := writer.FinishWrite()
@@ -108,13 +108,13 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors != nil {
 			switch errors.(type) {
 			case error:
-				w.Header().Set("Content-Type", "text/plain")  // 设置合适的Content-Type
-				w.WriteHeader(http.StatusInternalServerError) //将报错内容写入响应体
+				writer.Header().Set("Content-Type", "text/plain")  // 设置合适的Content-Type
+				writer.WriteHeader(http.StatusInternalServerError) //将报错内容写入响应体
 				marshal, _ := json.Marshal(errorStruct{
 					Code: http.StatusInternalServerError,
 					Msg:  errors.(error).Error(),
 				})
-				w.Write(marshal)
+				writer.Write(marshal)
 
 				stack := make([]byte, 1024)
 				length := runtime.Stack(stack, false)
