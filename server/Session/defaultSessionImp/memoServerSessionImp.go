@@ -13,17 +13,23 @@ const quicSessionName = "quickSession"
 
 type MemoServerSession struct {
 	memoMap map[string]Session.ItemInterFace
+	timeMap map[string]int64
 	lock    sync.Mutex
 	ExpTime time.Duration
 }
 
 func (m *MemoServerSession) GetItem(key string) Session.ItemInterFace {
-	return m.memoMap[key]
+	res := m.memoMap[key]
+	if res != nil {
+		m.timeMap[key] = time.Now().Unix()
+	}
+	return res
 }
 func (m *MemoServerSession) RemoveItem(key string) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	delete(m.memoMap, key)
+	delete(m.timeMap, key)
 	return true
 }
 func (m *MemoServerSession) StoreSession(key any, val Session.ItemInterFace) bool {
@@ -37,7 +43,7 @@ func (m *MemoServerSession) StoreSession(key any, val Session.ItemInterFace) boo
 		return false
 	}
 }
-func (m *MemoServerSession) Destroy() bool {
+func (m *MemoServerSession) DestroySelf() bool {
 	m.memoMap = nil
 	return true
 }
@@ -83,9 +89,27 @@ func (m *MemoServerSession) GenerateName() Session.GenerateName {
 		return uid.String(), initFunc()
 	}
 }
+
+// GetLastCallTime 上次调用的时间戳
+func (m *MemoServerSession) GetLastCallTime(key string) int64 {
+	if m.timeMap[key] == 0 {
+		return -1
+	}
+	return m.timeMap[key]
+}
+
+func (m *MemoServerSession) CleanExpItem() {
+	expTime, now := m.ExpTime, time.Now().Unix()
+	for key, val := range m.timeMap {
+		if now-val > int64(expTime.Seconds()) {
+			m.RemoveItem(key)
+		}
+	}
+}
 func NewMemoServerSession() *MemoServerSession {
 	return &MemoServerSession{
 		memoMap: make(map[string]Session.ItemInterFace),
+		timeMap: make(map[string]int64),
 		lock:    sync.Mutex{},
 	}
 }

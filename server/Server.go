@@ -26,11 +26,13 @@ type Server struct {
 	Route        *RouteDisPatch.Route
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
+	otherConfig  *Config
 }
 
 const (
 	InitSessionFunc = consts.InitSessionFunc
 	GetSession      = consts.GetSession
+	MaxSessionMemo  = consts.MaxSessionMemo
 )
 
 // listen creates an active listener for s that can be
@@ -87,6 +89,7 @@ func (s *Server) initContext(parent context.Context) context.Context {
 	child := withParent(parent)
 	child.SetValue(GetSession, s.Session)
 	child.SetValue(InitSessionFunc, s.generateFunc)
+	child.SetValue(MaxSessionMemo, s.otherConfig.maxMemo)
 	return child
 }
 
@@ -180,6 +183,9 @@ func NewHttpServer(addr string) *Server {
 }
 
 func (s *Server) StartServer() {
+	if s.otherConfig == nil {
+		s.otherConfig = defaultConfig
+	}
 	pc, err := s.listenPacket()
 	if err != nil {
 		panic(err.Error())
@@ -189,6 +195,8 @@ func (s *Server) StartServer() {
 	go func() {
 		s.Serve(ln)
 	}()
+	s.ScheduledTask()
+	s.closeListener()
 	s.ServePacket(pc)
 }
 func (s *Server) StartHttpSerer() {
@@ -201,6 +209,11 @@ func (s *Server) StartHttpSerer() {
 	//	panic(err.Error())
 	//}
 	//s.Serve(ln)
+	if s.otherConfig == nil {
+		s.otherConfig = defaultConfig
+	}
+	s.ScheduledTask()
+	s.closeListener()
 	s.Server.ListenAndServe()
 }
 func (s *Server) SetGenerateItemInterFace(generateFunc Session.GenerateItemInterFace) {

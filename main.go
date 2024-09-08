@@ -28,7 +28,7 @@ func main() {
 	newServer.AddHttpHandler("/bck/**", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		//param := r.Param
 		w.Write([]byte("欢迎访问http3页面"))
-		session := r.GetSession()
+		session, _ := r.GetSession()
 		value, _ := session.GetStoreValue("a")
 		if value != nil {
 			fmt.Println(value.(int))

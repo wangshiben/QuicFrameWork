@@ -12,3 +12,8 @@ const (
 	// Other 自定义实现
 	Other
 )
+
+// ERRORS
+const (
+	MaxMemo = sessionError("Have Rich MaxMemo")
+)

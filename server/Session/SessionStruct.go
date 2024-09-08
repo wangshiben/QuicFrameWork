@@ -20,11 +20,12 @@ type ServerSession interface {
 	//GetMemoPosition() MemoryPosition
 	GetItem(key string) ItemInterFace
 	RemoveItem(key string) bool
-	Destroy() bool
+	DestroySelf() bool
 	StoreSession(key any, val ItemInterFace) bool
 	GetExpireTime() time.Duration // 返回单个Session的过期时间
 	// GetKeyFromRequest 从请求中获取SessionKey
 	GetKeyFromRequest(r *http.Request) (key string, exist bool)
 	SetKeyToResponse() ResponseSetSession
 	GenerateName() GenerateName
+	CleanExpItem()
 }
