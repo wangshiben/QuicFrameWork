@@ -44,6 +44,9 @@ func (c *Context) SetValue(key string, val any) {
 func (Context) String() string {
 	return "context.Service"
 }
+func (c *Context) reset() {
+	c.parent = nil
+}
 
 func withParent(parent context.Context) *Context {
 	return &Context{

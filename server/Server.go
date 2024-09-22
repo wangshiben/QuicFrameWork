@@ -27,6 +27,7 @@ type Server struct {
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
 	otherConfig  *Config
+	contextPool  sync.Pool
 }
 
 const (
@@ -85,25 +86,34 @@ func (s *Server) ServePacket(pc net.PacketConn) error {
 	}
 	return nil
 }
-func (s *Server) initContext(parent context.Context) context.Context {
-	child := withParent(parent)
-	child.SetValue(GetSession, s.Session)
-	child.SetValue(InitSessionFunc, s.generateFunc)
-	child.SetValue(MaxSessionMemo, s.otherConfig.maxMemo)
+func (s *Server) initContext(parent context.Context) *Context {
+	child := s.contextPool.Get().(*Context)
+	child.parent = parent
+	if len(child.valueMap) == 0 {
+		child.SetValue(GetSession, s.Session)
+		child.SetValue(InitSessionFunc, s.generateFunc)
+		child.SetValue(MaxSessionMemo, s.otherConfig.maxMemo)
+	}
 	return child
 }
 
 func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		r = r.WithContext(s.initContext(r.Context()))
+		ctx := s.initContext(r.Context())
+		r = r.WithContext(ctx)
 		s.quicServer.SetQUICHeaders(w.Header())
 		previousHandler.ServeHTTP(w, r)
+		ctx.reset()
+		s.contextPool.Put(ctx)
 	}
 }
 func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		r.WithContext(s.initContext(r.Context()))
+		ctx := s.initContext(r.Context())
+		r.WithContext(ctx)
 		previousHandler.ServeHTTP(w, r)
+		ctx.reset()
+		s.contextPool.Put(ctx)
 	}
 }
 
@@ -151,13 +161,10 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 		TLSKey = DefaultKey
 	}
 	config := loadTLS(TLSPem, TLSKey)
-	s := &Server{
-		Server: &http.Server{
-			Addr:      addr,
-			TLSConfig: config,
-		},
-		generateFunc: defaultSessionImp.NewMemoItemInterFace,
-		Session:      defaultSessionImp.NewMemoServerSession(),
+	s := initDefaultServer()
+	s.Server = &http.Server{
+		Addr:      addr,
+		TLSConfig: config,
 	}
 	handler := RouteDisPatch.InitHandler()
 	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
@@ -171,11 +178,10 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 func NewHttpServer(addr string) *Server {
 	fmt.Println("已启动http服务")
 	handler := RouteDisPatch.InitHandler()
-	s := &Server{
-		Server: &http.Server{
-			Addr:    addr,
-			Handler: handler,
-		},
+	s := initDefaultServer()
+	s.Server = &http.Server{
+		Addr:    addr,
+		Handler: handler,
 	}
 	s.Server.Handler = s.serveHttp(handler)
 	s.Route = handler.Routes
@@ -198,6 +204,16 @@ func (s *Server) StartServer() {
 	s.ScheduledTask()
 	s.closeListener()
 	s.ServePacket(pc)
+}
+func initDefaultServer() *Server {
+	return &Server{
+		Server:       &http.Server{},
+		generateFunc: defaultSessionImp.NewMemoItemInterFace,
+		Session:      defaultSessionImp.NewMemoServerSession(),
+		contextPool: sync.Pool{New: func() any {
+			return withParent(nil)
+		}},
+	}
 }
 func (s *Server) StartHttpSerer() {
 	//pc, err := s.listenPacket()
