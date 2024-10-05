@@ -2,7 +2,7 @@ package defaultSessionImp
 
 import (
 	"github.com/google/uuid"
-	"github.com/wangshiben/QuicFrameWork/server/Session"
+	"github.com/wangshiben/QuicFrameWork/Session"
 	"net/http"
 	"sync"
 	"time"

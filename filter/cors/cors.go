@@ -1,7 +1,7 @@
 package cors
 
 import (
-	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
 	"net/http"
 	"strconv"
 	"strings"

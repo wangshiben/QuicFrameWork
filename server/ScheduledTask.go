@@ -1,8 +1,6 @@
 package server
 
 import (
-	"fmt"
-	"github.com/wangshiben/QuicFrameWork/server/size"
 	"os"
 	"os/signal"
 	"runtime"
@@ -36,9 +34,9 @@ func (s *Server) ScheduledTask() {
 				flag = false
 				break
 			case _ = <-ticker.C:
-				sizeof := size.Of(s.Session)
+				//sizeof := size.Of(s.Session)
 				s.Session.CleanExpItem()
-				fmt.Println("目前session大小: " + fmt.Sprintf("%d", sizeof))
+				//fmt.Println("目前session大小: " + fmt.Sprintf("%d", sizeof))
 			}
 		}
 

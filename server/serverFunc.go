@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
-	"github.com/wangshiben/QuicFrameWork/server/filter/cors"
+	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/filter/cors"
 )
 
 func (s *Server) AddHttpHandler(path, HttpMethod string, handler RouteDisPatch.HttpHandle) {

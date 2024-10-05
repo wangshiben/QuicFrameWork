@@ -5,10 +5,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/quic-go/quic-go/http3"
-	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
-	"github.com/wangshiben/QuicFrameWork/server/Session"
-	"github.com/wangshiben/QuicFrameWork/server/Session/defaultSessionImp"
-	"github.com/wangshiben/QuicFrameWork/server/consts"
+	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/Session"
+	"github.com/wangshiben/QuicFrameWork/Session/defaultSessionImp"
+	"github.com/wangshiben/QuicFrameWork/consts"
 	"log"
 	"net"
 	"net/http"
@@ -201,10 +201,14 @@ func (s *Server) StartServer() {
 	go func() {
 		s.Serve(ln)
 	}()
-	s.ScheduledTask()
-	s.closeListener()
+	s.startFunc()
 	s.ServePacket(pc)
 }
+func (s *Server) startFunc() {
+	s.ScheduledTask()
+	s.closeListener()
+}
+
 func initDefaultServer() *Server {
 	return &Server{
 		Server:       &http.Server{},
@@ -228,10 +232,16 @@ func (s *Server) StartHttpSerer() {
 	if s.otherConfig == nil {
 		s.otherConfig = defaultConfig
 	}
-	s.ScheduledTask()
-	s.closeListener()
+	s.startFunc()
 	s.Server.ListenAndServe()
 }
 func (s *Server) SetGenerateItemInterFace(generateFunc Session.GenerateItemInterFace) {
-	s.generateFunc = generateFunc
+	if generateFunc != nil {
+		s.generateFunc = generateFunc
+	}
+}
+func (s *Server) SetMemoServerSession(sessionMemo Session.ServerSession) {
+	if sessionMemo != nil {
+		s.Session = sessionMemo
+	}
 }

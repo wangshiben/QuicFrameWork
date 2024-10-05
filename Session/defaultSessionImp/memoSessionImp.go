@@ -1,7 +1,7 @@
 package defaultSessionImp
 
 import (
-	"github.com/wangshiben/QuicFrameWork/server/Session"
+	"github.com/wangshiben/QuicFrameWork/Session"
 	"sync"
 )
 

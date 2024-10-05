@@ -1,9 +1,9 @@
 package RouteDisPatch
 
 import (
-	"github.com/wangshiben/QuicFrameWork/server/Session"
-	"github.com/wangshiben/QuicFrameWork/server/consts"
-	"github.com/wangshiben/QuicFrameWork/server/size"
+	"github.com/wangshiben/QuicFrameWork/Session"
+	"github.com/wangshiben/QuicFrameWork/consts"
+	"github.com/wangshiben/QuicFrameWork/size"
 	"net/http"
 )
 

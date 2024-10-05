@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/RouteHand"
 	"github.com/wangshiben/QuicFrameWork/server"
-	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
-	"github.com/wangshiben/QuicFrameWork/server/RouteHand"
 	"net/http"
 	"reflect"
 )
