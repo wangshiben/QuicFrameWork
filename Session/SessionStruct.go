@@ -28,7 +28,7 @@ type ServerSession interface {
 	GetExpireTime() time.Duration                 // 返回单个Session的过期时间
 	// GetKeyFromRequest 从请求中获取SessionKey
 	GetKeyFromRequest(r *http.Request) (key string, exist bool)
-	SetKeyToResponse() ResponseSetSession // 在首次response中设置sessionKey
+	SetKeyToResponse() ResponseSetSession // 在首次response中设置sessionKey,可自定义key的存在形式，类似于java中的JSESSION Cookie
 	GenerateName() GenerateName           //生成 map[SessionItem]string中的string
 	CleanExpItem()                        // 清理过期的Session
 }
