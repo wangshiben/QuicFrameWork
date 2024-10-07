@@ -11,65 +11,77 @@ import (
 const DefaultExpTime = time.Minute * 30
 const quicSessionName = "quickSession"
 
-type MemoServerSession struct {
-	memoMap storeStruct[Session.ItemInterFace]
-	timeMap storeStruct[int64]
+type BaseServerSession struct {
+	store   storeStruct
 	lock    sync.Mutex
 	expTime time.Duration
 }
-type storeStruct[T interface{}] interface {
-	StoreItem(key string, val T)
-	GetItem(Key string) T
-	DeleteItem(key string)
-	GetRange() map[string]T // only used in CleanExpItem
+type storeStruct interface {
+	StoreItemInterFace(key string, val Session.ItemInterFace)
+	UpdateUsedTime(key string, timeStamp int64)
+	RemoveItem(key string)
+	GetItemInterFace(key string) Session.ItemInterFace
+	GetLastCallTime(key string) int64
+	GetCallTimeMap() map[string]int64
 }
-type defaultStoreImp[T interface{}] struct {
-	store map[string]T
+type defaultStoreImp struct {
+	store       map[string]Session.ItemInterFace
+	callTimeMap map[string]int64
 }
 
-func (d *defaultStoreImp[T]) StoreItem(key string, val T) {
+func (d *defaultStoreImp) StoreItemInterFace(key string, val Session.ItemInterFace) {
 	d.store[key] = val
 }
-func (d *defaultStoreImp[T]) GetItem(Key string) T {
-	return d.store[Key]
-}
-func (d *defaultStoreImp[T]) DeleteItem(Key string) {
-	delete(d.store, Key)
-}
-func (d *defaultStoreImp[T]) GetRange() map[string]T {
-	return d.store
+func (d *defaultStoreImp) UpdateUsedTime(key string, timeStamp int64) {
+	d.callTimeMap[key] = timeStamp
 }
 
-func (m *MemoServerSession) GetItem(key string) Session.ItemInterFace {
-	res := m.memoMap.GetItem(key)
+func (d *defaultStoreImp) RemoveItem(key string) {
+	delete(d.store, key)
+	delete(d.callTimeMap, key)
+}
+func (d *defaultStoreImp) GetItemInterFace(key string) Session.ItemInterFace {
+	return d.store[key]
+}
+func (d *defaultStoreImp) GetLastCallTime(key string) int64 {
+	return d.callTimeMap[key]
+}
+func (d *defaultStoreImp) GetCallTimeMap() map[string]int64 {
+	return d.callTimeMap
+}
+
+func (m *BaseServerSession) GetItem(key string) Session.ItemInterFace {
+	res := m.store.GetItemInterFace(key)
 	if res != nil {
-		m.timeMap.StoreItem(key, time.Now().Unix())
+		m.store.UpdateUsedTime(key, time.Now().Unix())
 	}
 	return res
 }
-func (m *MemoServerSession) RemoveItem(key string) bool {
+func (m *BaseServerSession) RemoveItem(key string) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.memoMap.DeleteItem(key)
-	m.timeMap.DeleteItem(key)
+	m.store.RemoveItem(key)
 	return true
 }
-func (m *MemoServerSession) StoreSession(key any, val Session.ItemInterFace) bool {
+func (m *BaseServerSession) StoreSession(key any, val Session.ItemInterFace) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	switch key.(type) {
 	case string:
-		m.memoMap.StoreItem(key.(string), val)
+		m.store.StoreItemInterFace(key.(string), val)
+		m.store.UpdateUsedTime(key.(string), time.Now().Unix())
 		return true
 	default:
 		return false
 	}
 }
-func (m *MemoServerSession) DestroySelf() bool {
-	m.memoMap = nil
+
+// DestroySelf only Server exit called
+func (m *BaseServerSession) DestroySelf() bool {
+	m.store = nil
 	return true
 }
-func (m *MemoServerSession) GetExpireTime() time.Duration {
+func (m *BaseServerSession) GetExpireTime() time.Duration {
 	if m.expTime == 0 {
 		m.lock.Lock()
 		defer m.lock.Unlock()
@@ -78,19 +90,19 @@ func (m *MemoServerSession) GetExpireTime() time.Duration {
 	return m.expTime
 	//return DefaultExpTime
 }
-func (m *MemoServerSession) SetExpireTime(exp time.Duration) {
+func (m *BaseServerSession) SetExpireTime(exp time.Duration) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.expTime = exp
 }
-func (m *MemoServerSession) GetKeyFromRequest(req *http.Request) (string, bool) {
+func (m *BaseServerSession) GetKeyFromRequest(req *http.Request) (string, bool) {
 	cookie, err := req.Cookie(quicSessionName)
 	if err != nil || cookie == nil {
 		return "", false
 	}
 	return cookie.Value, true
 }
-func (m *MemoServerSession) SetKeyToResponse() Session.ResponseSetSession {
+func (m *BaseServerSession) SetKeyToResponse() Session.ResponseSetSession {
 	return func(w http.ResponseWriter, Key string) {
 		cookieIn := &http.Cookie{
 			Name:     quicSessionName,
@@ -105,7 +117,7 @@ func (m *MemoServerSession) SetKeyToResponse() Session.ResponseSetSession {
 		w.Header().Set("Set-Cookie", cookieIn.String())
 	}
 }
-func (m *MemoServerSession) GenerateName() Session.GenerateName {
+func (m *BaseServerSession) GenerateName() Session.GenerateName {
 	return func(initFunc Session.GenerateItemInterFace) (string, Session.ItemInterFace) {
 		uid := uuid.New()
 		return uid.String(), initFunc()
@@ -113,28 +125,31 @@ func (m *MemoServerSession) GenerateName() Session.GenerateName {
 }
 
 // GetLastCallTime 上次调用的时间戳
-func (m *MemoServerSession) GetLastCallTime(key string) int64 {
-	if m.timeMap.GetItem(key) == 0 {
+func (m *BaseServerSession) GetLastCallTime(key string) int64 {
+	lastCallTime := m.store.GetLastCallTime(key)
+	if lastCallTime == 0 {
 		return -1
 	}
-	return m.timeMap.GetItem(key)
+	return lastCallTime
 }
 
-func (m *MemoServerSession) CleanExpItem() {
+func (m *BaseServerSession) CleanExpItem() {
 	expTime, now := m.expTime, time.Now().Unix()
-	for key, val := range m.timeMap.GetRange() {
+	for key, val := range m.store.GetCallTimeMap() {
 		if now-val > int64(expTime.Seconds()) {
 			m.RemoveItem(key)
 		}
 	}
 }
-func NewMemoServerSession() *MemoServerSession {
-	return &MemoServerSession{
-		memoMap: newDefaultStoreItem[Session.ItemInterFace](),
-		timeMap: newDefaultStoreItem[int64](),
-		lock:    sync.Mutex{},
+func NewMemoServerSession() *BaseServerSession {
+	return &BaseServerSession{
+		store: newDefaultStoreItem(),
+		lock:  sync.Mutex{},
 	}
 }
-func newDefaultStoreItem[T interface{}]() storeStruct[T] {
-	return &defaultStoreImp[T]{store: make(map[string]T, 0)}
+func newDefaultStoreItem() storeStruct {
+	return &defaultStoreImp{
+		store:       make(map[string]Session.ItemInterFace, 0),
+		callTimeMap: make(map[string]int64, 0),
+	}
 }
