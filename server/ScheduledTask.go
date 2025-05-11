@@ -16,7 +16,7 @@ func (s *Server) ScheduledTask() {
 	runtime.ReadMemStats(&stats)
 
 	go func() {
-		ticker := time.NewTicker(s.Session.GetExpireTime() / 2)
+		ticker := time.NewTicker(s.Session.GetNextTimePicker())
 		//ticker := time.NewTicker(time.Second * 2)
 
 		defer ticker.Stop()

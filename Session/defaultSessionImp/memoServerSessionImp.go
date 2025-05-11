@@ -12,42 +12,9 @@ const DefaultExpTime = time.Minute * 30
 const quicSessionName = "quickSession"
 
 type BaseServerSession struct {
-	store   storeStruct
+	store   Session.StoreStruct
 	lock    sync.Mutex
 	expTime time.Duration
-}
-type storeStruct interface {
-	StoreItemInterFace(key string, val Session.ItemInterFace)
-	UpdateUsedTime(key string, timeStamp int64)
-	RemoveItem(key string)
-	GetItemInterFace(key string) Session.ItemInterFace
-	GetLastCallTime(key string) int64
-	GetCallTimeMap() map[string]int64
-}
-type defaultStoreImp struct {
-	store       map[string]Session.ItemInterFace
-	callTimeMap map[string]int64
-}
-
-func (d *defaultStoreImp) StoreItemInterFace(key string, val Session.ItemInterFace) {
-	d.store[key] = val
-}
-func (d *defaultStoreImp) UpdateUsedTime(key string, timeStamp int64) {
-	d.callTimeMap[key] = timeStamp
-}
-
-func (d *defaultStoreImp) RemoveItem(key string) {
-	delete(d.store, key)
-	delete(d.callTimeMap, key)
-}
-func (d *defaultStoreImp) GetItemInterFace(key string) Session.ItemInterFace {
-	return d.store[key]
-}
-func (d *defaultStoreImp) GetLastCallTime(key string) int64 {
-	return d.callTimeMap[key]
-}
-func (d *defaultStoreImp) GetCallTimeMap() map[string]int64 {
-	return d.callTimeMap
 }
 
 func (m *BaseServerSession) GetItem(key string) Session.ItemInterFace {
@@ -141,15 +108,26 @@ func (m *BaseServerSession) CleanExpItem() {
 		}
 	}
 }
-func NewMemoServerSession() *BaseServerSession {
+func (m *BaseServerSession) GetNextTimePicker() time.Duration {
+	return m.GetExpireTime() / 2
+}
+func NewServerSession() *BaseServerSession {
 	return &BaseServerSession{
 		store: newDefaultStoreItem(),
 		lock:  sync.Mutex{},
 	}
 }
-func newDefaultStoreItem() storeStruct {
+func NewServerSessionWithStore(store Session.StoreStruct) Session.ServerSession {
+	return &BaseServerSession{
+		store:   store,
+		lock:    sync.Mutex{},
+		expTime: 0,
+	}
+}
+
+func newDefaultStoreItem() Session.StoreStruct {
 	return &defaultStoreImp{
-		store:       make(map[string]Session.ItemInterFace, 0),
-		callTimeMap: make(map[string]int64, 0),
+		store:       make(map[string]Session.ItemInterFace),
+		callTimeMap: make(map[string]int64),
 	}
 }

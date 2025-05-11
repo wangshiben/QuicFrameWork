@@ -213,7 +213,7 @@ func initDefaultServer() *Server {
 	return &Server{
 		Server:       &http.Server{},
 		generateFunc: defaultSessionImp.NewMemoItemInterFace,
-		Session:      defaultSessionImp.NewMemoServerSession(),
+		Session:      defaultSessionImp.NewServerSession(),
 		contextPool: sync.Pool{New: func() any {
 			return withParent(nil)
 		}},

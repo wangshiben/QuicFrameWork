@@ -51,7 +51,13 @@ main.go中内容
 
 ## TODO
 
+> v0.1.0 TODO 
+
 1. [x] 拦截器注册
 2. [ ] 优化路径匹配
 3. [x] 鉴权设计以及Session管理
 4. [x] 优化正则匹配
+> v0.2.0 TODO
+1. [ ] 支持SSE协议
+2. [ ] 支持WebSocket协议
+3. [ ] 支持StreamHttp协议

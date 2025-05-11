@@ -26,9 +26,18 @@ type ServerSession interface {
 	DestroySelf() bool                            // 生命周期结束调用
 	StoreSession(key any, val ItemInterFace) bool //生成后存储单个Session
 	GetExpireTime() time.Duration                 // 返回单个Session的过期时间
+	GetNextTimePicker() time.Duration
 	// GetKeyFromRequest 从请求中获取SessionKey
 	GetKeyFromRequest(r *http.Request) (key string, exist bool)
 	SetKeyToResponse() ResponseSetSession // 在首次response中设置sessionKey,可自定义key的存在形式，类似于java中的JSESSION Cookie
 	GenerateName() GenerateName           //生成 map[SessionItem]string中的string
 	CleanExpItem()                        // 清理过期的Session
+}
+type StoreStruct interface {
+	StoreItemInterFace(key string, val ItemInterFace)
+	UpdateUsedTime(key string, timeStamp int64)
+	RemoveItem(key string)
+	GetItemInterFace(key string) ItemInterFace
+	GetLastCallTime(key string) int64
+	GetCallTimeMap() map[string]int64
 }
