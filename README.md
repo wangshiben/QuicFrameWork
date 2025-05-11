@@ -1,65 +1,69 @@
 # QuickFrameWork
 
-兼容Http1-1和Http2的框架，支持Http1-1,Http2,Http3的请求
+A framework compatible with Http1-1 and Http2, supporting Http1-1, Http2, and Http3 requests.
 
-默认可自签名证书(ESDA)
+Default self-signed certificate (ESDA) support.
 
-快速上手: [参考文档](https://quicframeworkdoc.github.io/)
+Quick Start: [Documentation](https://quicframeworkdoc.github.io/)
 
-## 优点:
-1. 对于高并发场景下处理更快
-> 测试内容请移步测试文档:
-> 
-> [测试文档](test.md)
+Language: English | [中文](README_zh.md)
 
-2. 根据request结构体自动注入内容,支持自定义request位置和默认值以及参数重命名
+## Advantages:
+1. Faster processing in high-concurrency scenarios
+> For test results, please refer to the test documentation:
+>
+> [Test Documentation](test.md)
 
-## 目前支持:
+2. Automatic content injection based on request structure, supporting custom request locations, default values, and parameter renaming
 
-1. 路径支持正则匹配以及 * 匹配和 ** 匹配
-2. 请求报错捕捉JSON输出
-3. 支持自定义签名证书
-4. 根据request结构体自动注入内容,支持自定义request位置和默认值以及参数重命名
-## 快速开始
+## Currently Supported:
 
-1. 引入:
+1. Path supports regular expression matching, * matching, and ** matching
+2. JSON output for request error handling
+3. Support for custom signature certificates
+4. Automatic content injection based on request structure, supporting custom request locations, default values, and parameter renaming
+
+## Quick Start
+
+1. Import:
 
 ```bash
 go get github.com/wangshiben/QuicFrameWork
 ```
 
-2. 使用
+2. Usage
 
 ```go
 func main() {
-//可信的证书      
+    // Trusted certificate
     newServer := server.NewServer("cert.pem", "cert.key", ":4445")
-    // 或: newServer := server.NewServer("", "", ":4445")使用自签名证书
+    // Or: newServer := server.NewServer("", "", ":4445") to use self-signed certificate
     newServer.AddHttpHandler("/bck/**", http.MethodGet, func (w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "欢迎访问http3页面")
-    fmt.Println(r.Proto)
+        fmt.Fprintf(w, "Welcome to http3 page")
+        fmt.Println(r.Proto)
     })
     newServer.AddHttpHandler("/bck/**", http.MethodPost, func (w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "欢迎访问http3 POST页面")
-    fmt.Println(r.Proto)
+        fmt.Fprintf(w, "Welcome to http3 POST page")
+        fmt.Println(r.Proto)
     })
     newServer.StartServer()
 }
 ```
 
-3. 使用参考
+3. Usage Reference
 
-main.go中内容
+See main.go for examples
 
 ## TODO
 
-> v0.1.0 TODO 
+> v0.1.0 TODO
 
-1. [x] 拦截器注册
-2. [ ] 优化路径匹配
-3. [x] 鉴权设计以及Session管理
-4. [x] 优化正则匹配
+1. [x] Interceptor registration
+2. [ ] Path matching optimization
+3. [x] Authentication design and Session management
+4. [x] Regular expression matching optimization
+
 > v0.2.0 TODO
-1. [ ] 支持SSE协议
-2. [ ] 支持WebSocket协议
-3. [ ] 支持StreamHttp协议
+1. [ ] SSE protocol support
+2. [ ] WebSocket protocol support
+3. [ ] StreamHttp protocol support 
