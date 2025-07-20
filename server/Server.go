@@ -3,12 +3,15 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/Session/defaultSessionImp"
 	"github.com/wangshiben/QuicFrameWork/consts"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +24,7 @@ import (
 type Server struct {
 	Server       *http.Server
 	quicServer   *http3.Server
+	h2Server     *http2.Server
 	listener     net.Listener
 	lock         sync.Mutex
 	Route        *RouteDisPatch.Route
@@ -68,7 +72,7 @@ func (s *Server) Serve(ln net.Listener) error {
 	s.lock.Unlock()
 
 	err := s.Server.Serve(ln)
-	if err == http.ErrServerClosed {
+	if errors.Is(err, http.ErrServerClosed) {
 		err = nil
 	}
 	if s.quicServer != nil {
@@ -168,7 +172,7 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	}
 	handler := RouteDisPatch.InitHandler()
 	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
-	s.Server.Handler = s.wrapWithSvcHeaders(handler)
+	s.Server.Handler = h2c.NewHandler(s.wrapWithSvcHeaders(handler), s.h2Server)
 	//s.quicServer.Handler=
 	s.Route = handler.Routes
 	// s.Server.Handler = s
