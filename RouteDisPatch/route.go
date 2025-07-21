@@ -2,6 +2,8 @@ package RouteDisPatch
 
 import (
 	"fmt"
+	"github.com/wangshiben/QuicFrameWork/Connections"
+	"github.com/wangshiben/QuicFrameWork/consts"
 	"net/http"
 	"strings"
 )
@@ -34,6 +36,43 @@ type HttpFilter func(w http.ResponseWriter, r *Request, next Next)
 type HttpHandle func(w http.ResponseWriter, r *Request)
 type NextFunc func(w http.ResponseWriter, r *http.Request, next []HttpFilter, nextFunc NextFunc)
 
+type SSEHandle func(conn *Connections.SSEConnection)
+
+func sseHandle(connectionFunc SSEHandle) HttpHandle {
+	return func(w http.ResponseWriter, r *Request) {
+		// SET Header to enable streaming
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		// Make sure to set the content type
+		w.WriteHeader(http.StatusOK)
+		conn, chanMsg, err := Connections.NewSSEConnection(w, r)
+		if err != nil {
+			fmt.Println("Error creating SSE connection:", err)
+			return
+		}
+		go func() {
+			defer func() {
+				err := recover()
+				if err != nil {
+					fmt.Println("panic:", err)
+				}
+			}()
+			connectionFunc(conn)
+			conn.Close()
+		}()
+		msg := <-chanMsg
+		if msg != consts.Close {
+			http.Error(w, "Connection closed", http.StatusInternalServerError)
+		}
+		close(chanMsg)
+		fmt.Println("Connection closed")
+	}
+}
+func (r *Route) AddSSEHandler(path, HttpMethod string, handler SSEHandle) {
+	path = formatPath(path)
+	r.addHandler(path, HttpMethod, path, nil, reqParam, sseHandle(handler))
+}
 func pageError() HttpHandle {
 	return func(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Content-Type", "text/plain")  // 设置合适的Content-Type

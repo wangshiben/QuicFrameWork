@@ -44,7 +44,7 @@ func CORS(config CORSConfig) RouteDisPatch.HttpFilter {
 		w.Header().Set("Access-Control-Max-Age", strconv.Itoa(config.MaxAge))
 
 		// 如果是预检请求，直接返回204
-		if r.Method == "OPTIONS" {
+		if r.GetRequest().Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

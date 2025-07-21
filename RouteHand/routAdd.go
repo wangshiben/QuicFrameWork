@@ -19,7 +19,7 @@ func PathAutowired[T interface{}](server *server.Server, path, method string, re
 		Param := r.Param.(*T)
 		q := QuickFrameWork[T]{
 			Writer:  w,
-			Request: r.Request,
+			Request: r.GetRequest(),
 			Param:   *Param,
 		}
 		request(&q)

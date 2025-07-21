@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/wangshiben/QuicFrameWork/Connections"
 	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/RouteHand"
 	"github.com/wangshiben/QuicFrameWork/server"
 	"net/http"
 	"reflect"
+	"time"
 )
 
 type TestStruct struct {
@@ -40,20 +42,20 @@ func main() {
 		//w.Write([]byte("欢迎访问http3页面1111"))
 		//w.WriteHeader(http.StatusNotFound)
 		//fmt.Fprintf(w, "欢迎访问http3页面")
-		fmt.Println(r.Proto)
+		fmt.Println(r.GetRequest().Proto)
 
 	})
 	newServer.AddHttpHandler("/bck/**", http.MethodPost, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		value := reflect.ValueOf(r.Param)
 		value.Type()
 		fmt.Fprintf(w, "欢迎访问http3 POST页面")
-		fmt.Println(r.Proto)
+		fmt.Println(r.GetRequest().Proto)
 	})
 	newServer.AddHttpHandler("/test/testFilter", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		//value := reflect.ValueOf(r.Param)
 		//value.Type()
 		fmt.Fprintf(w, "欢迎访问http3 POST页面")
-		fmt.Println(r.Proto)
+		fmt.Println(r.GetRequest().Proto)
 	})
 	newServer.AddFilter("/test/**", func(w http.ResponseWriter, r *RouteDisPatch.Request, next RouteDisPatch.Next) {
 		fmt.Println("拦截到了请求")
@@ -83,6 +85,35 @@ func main() {
 	})
 	newServer.Route.AddBodyParamHandler("/test/{name:3}", http.MethodGet, &TestPathParam{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		fmt.Println(r.Param.(*TestPathParam).Name)
+	})
+
+	newServer.Route.AddSSEHandler("/test/sse", http.MethodGet, func(conn *Connections.SSEConnection) {
+		// 设置标准的 SSE 响应头
+		//http.Hijacker()
+		err := conn.SendEvent(&Connections.SSEEvent{Data: "hello world0"})
+		if err != nil {
+			fmt.Println("Error sending message:", err)
+			return
+		}
+		// 发送 SSE 消息
+		time.Sleep(5 * time.Second)
+
+		err = conn.SendEvent(&Connections.SSEEvent{Data: "hello world"})
+		if err != nil {
+			fmt.Println("Error sending message:", err)
+			return
+		}
+
+		time.Sleep(5 * time.Second)
+		err = conn.SendEvent(&Connections.SSEEvent{Data: "hello world2"})
+		if err != nil {
+			fmt.Println("Error sending message:", err)
+			return
+		}
+		err = conn.Close()
+		if err != nil {
+			return
+		}
 	})
 
 	//添加跨域功能

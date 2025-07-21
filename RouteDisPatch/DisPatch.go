@@ -74,10 +74,7 @@ func (n *Next) Next(w http.ResponseWriter, r *Request) {
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
 	writer := Writer.NewWriter(w)
-	request := &Request{
-		Request: r,
-		writer:  writer,
-	}
+	request := NewRequest(r)
 	//request.GetSession()
 	defer func() {
 		_, err := writer.FinishWrite()

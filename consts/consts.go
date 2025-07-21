@@ -11,3 +11,6 @@ const (
 	MB   = 1024 * KB
 	GB   = 1024 * MB
 )
+const (
+	Close = "close"
+)

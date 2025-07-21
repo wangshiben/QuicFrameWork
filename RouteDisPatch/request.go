@@ -10,8 +10,9 @@ import (
 const quicSessionName = "quickSession"
 
 type Request struct {
-	writer http.ResponseWriter
-	*http.Request
+	writer  http.ResponseWriter
+	req     *http.Request
+	Request *http.Request
 	Param   interface{}
 	session Session.ItemInterFace
 }
@@ -22,12 +23,12 @@ func (r *Request) GetSession() (Session.ItemInterFace, error) {
 	if r.session != nil {
 		return r.session, nil
 	}
-	context := r.Context()
+	context := r.req.Context()
 	value := context.Value(consts.GetSession)
 	initFunc := context.Value(consts.InitSessionFunc).(Session.GenerateItemInterFace)
 	maxMemo := context.Value(consts.MaxSessionMemo).(int)
 	sessionMap := value.(Session.ServerSession)
-	key, exist := sessionMap.GetKeyFromRequest(r.Request)
+	key, exist := sessionMap.GetKeyFromRequest(r.req)
 	if exist {
 		item := sessionMap.GetItem(key)
 		if item != nil {
@@ -49,9 +50,15 @@ func (r *Request) GetSession() (Session.ItemInterFace, error) {
 	return session, nil
 
 }
+func (r *Request) GetParam() interface{} {
+	return r.Param
+}
+func (r *Request) GetRequest() *http.Request {
+	return r.req
+}
 
 func NewRequest(r *http.Request) *Request {
 	return &Request{
-		Request: r,
+		req: r,
 	}
 }
