@@ -11,7 +11,6 @@ import (
 	"github.com/wangshiben/QuicFrameWork/Session/defaultSessionImp"
 	"github.com/wangshiben/QuicFrameWork/consts"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"log"
 	"net"
 	"net/http"
@@ -172,7 +171,7 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	}
 	handler := RouteDisPatch.InitHandler()
 	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
-	s.Server.Handler = h2c.NewHandler(s.wrapWithSvcHeaders(handler), s.h2Server)
+	s.Server.Handler = s.wrapWithSvcHeaders(handler)
 	//s.quicServer.Handler=
 	s.Route = handler.Routes
 	// s.Server.Handler = s

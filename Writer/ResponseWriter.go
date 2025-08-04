@@ -1,8 +1,10 @@
 package Writer
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 )
 
@@ -42,6 +44,9 @@ func (w *Writer) Flush() {
 	//}
 
 	flusher.Flush()
+}
+func (w *Writer) HiJack() (net.Conn, *bufio.ReadWriter, error) {
+	return w.writer.(http.Hijacker).Hijack()
 }
 func NewWriter(w http.ResponseWriter) *Writer {
 	return &Writer{
