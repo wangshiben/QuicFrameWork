@@ -45,7 +45,7 @@ func (w *Writer) Flush() {
 
 	flusher.Flush()
 }
-func (w *Writer) HiJack() (net.Conn, *bufio.ReadWriter, error) {
+func (w *Writer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return w.writer.(http.Hijacker).Hijack()
 }
 func NewWriter(w http.ResponseWriter) *Writer {

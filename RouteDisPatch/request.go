@@ -59,6 +59,7 @@ func (r *Request) GetRequest() *http.Request {
 
 func NewRequest(r *http.Request) *Request {
 	return &Request{
-		req: r,
+		req:     r,
+		Request: r,
 	}
 }
