@@ -119,6 +119,21 @@ func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 		s.contextPool.Put(ctx)
 	}
 }
+func (s *Server) Close() error {
+	err := s.Server.Close()
+	if err != nil {
+		return err
+	}
+	err = s.Session.Close()
+	if err != nil {
+		return err
+	}
+	err = s.listener.Close()
+	if err != nil {
+		return err
+	}
+	return s.quicServer.Close()
+}
 
 type tcpKeepAliveListener struct {
 	*net.TCPListener

@@ -27,3 +27,8 @@ func (d *defaultStoreImp) GetLastCallTime(key string) int64 {
 func (d *defaultStoreImp) GetCallTimeMap() map[string]int64 {
 	return d.callTimeMap
 }
+func (d *defaultStoreImp) Close() error {
+	d.store = nil
+	d.callTimeMap = nil
+	return nil
+}

@@ -42,6 +42,14 @@ func (m *BaseServerSession) StoreSession(key any, val Session.ItemInterFace) boo
 		return false
 	}
 }
+func (m *BaseServerSession) Close() error {
+	err := m.store.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
 
 // DestroySelf only Server exit called
 func (m *BaseServerSession) DestroySelf() bool {

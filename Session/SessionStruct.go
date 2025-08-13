@@ -32,6 +32,7 @@ type ServerSession interface {
 	SetKeyToResponse() ResponseSetSession // 在首次response中设置sessionKey,可自定义key的存在形式，类似于java中的JSESSION Cookie
 	GenerateName() GenerateName           //生成 map[SessionItem]string中的string
 	CleanExpItem()                        // 清理过期的Session
+	Close() error
 }
 type StoreStruct interface {
 	StoreItemInterFace(key string, val ItemInterFace)
@@ -40,4 +41,5 @@ type StoreStruct interface {
 	GetItemInterFace(key string) ItemInterFace
 	GetLastCallTime(key string) int64
 	GetCallTimeMap() map[string]int64
+	Close() error
 }

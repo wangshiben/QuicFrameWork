@@ -34,6 +34,13 @@ func (c *CircularQueueStore) UpdateUsedTime(key string, timeStamp int64) {
 	}
 	c.callTimeMap[key] = []int{indexX, indexY}
 }
+func (c *CircularQueueStore) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.store = nil
+	c.callTimeMap = nil
+	return nil
+}
 
 func (c *CircularQueueStore) RemoveItem(key string) {
 	delete(c.store, key)

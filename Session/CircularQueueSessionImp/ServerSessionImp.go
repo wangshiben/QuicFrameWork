@@ -58,6 +58,13 @@ func (m *CircularQueueSession) CleanExpItem() {
 func (m *CircularQueueSession) GetNextTimePicker() time.Duration {
 	return m.GetExpireTime() / time.Minute
 }
+func (m *CircularQueueSession) Close() error {
+	err := m.Base.Close()
+	if err != nil {
+		return err
+	}
+	return m.StoreItem.Close()
+}
 
 func NewServerSession() *CircularQueueSession {
 	store := &CircularQueueStore{
