@@ -1,6 +1,7 @@
 package RouteDisPatch
 
 import (
+	"encoding/json"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/consts"
 	"github.com/wangshiben/QuicFrameWork/size"
@@ -55,6 +56,14 @@ func (r *Request) GetParam() interface{} {
 }
 func (r *Request) GetRequest() *http.Request {
 	return r.req
+}
+func (r *Request) ToJson(v any) error {
+	marshal, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = r.writer.Write(marshal)
+	return err
 }
 
 func NewRequest(r *http.Request) *Request {

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Connections"
 	"github.com/wangshiben/QuicFrameWork/consts"
+	"github.com/wangshiben/QuicFrameWork/utils"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -86,6 +88,9 @@ func (r *Route) AddHttpHandler(path, HttpMethod string, handler HttpHandle) {
 }
 
 func (r *Route) AddOriginHandler(path, HttpMethod string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
+	if utils.IsPointer(paramPointer) {
+		panic(ErrorParamType)
+	}
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, paramPointer, defaultPosition, handler)
 }
@@ -97,10 +102,16 @@ func formatPath(path string) string {
 	return path
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
+	if utils.IsPointer(param) {
+		panic(ErrorParamType)
+	}
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, param, reqParam, handler)
 }
 func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
+	if utils.IsPointer(param) {
+		panic(ErrorParamType)
+	}
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, param, header, handler)
 }
@@ -254,6 +265,7 @@ func (r *Route) addHandler(path, HttpMethod, OriginPath string, paramPointer int
 	//路径:  /a/b/c/d
 	routes := strings.SplitN(path, "/", 2)
 	if len(routes) == 1 { //最终的子路由
+		checkPointerTag(paramPointer)
 		r.NextRoute = append(r.NextRoute, &Route{
 			path:                 routes[0],
 			Handler:              handler,
@@ -272,6 +284,18 @@ func (r *Route) addHandler(path, HttpMethod, OriginPath string, paramPointer int
 			r.Index[routes[0]] = len(r.NextRoute) - 1
 			r.NextRoute[len(r.NextRoute)-1].addHandler(routes[1], HttpMethod, path, paramPointer, defaultPosition, handler)
 		}
+	}
+}
+func checkPointerTag(paramPointer interface{}) {
+	if paramPointer == nil {
+		return
+	}
+	val := reflect.ValueOf(paramPointer)
+	elemType := val.Elem().Type()
+	for i := 0; i < elemType.NumField(); i++ {
+		tags := elemType.Field(i).Tag
+		tagDefault := tags.Get(defaultTag)
+		parseAllTag(tagDefault)
 	}
 }
 func InitRoute() *Route {

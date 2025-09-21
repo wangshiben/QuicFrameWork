@@ -17,6 +17,12 @@ const (
 	locationTag  = "quickLoc"     //参数位置在哪
 	defaultValue = "quickDefault" //参数默认值
 	param        = "quickParam"   //参数对应的param名字，类似于 `json:"name"`
+	defaultTag   = "quic"         // new  tag
+)
+const (
+	locate            = "location"
+	paramNames        = "name"
+	defaultValueInTag = "default"
 )
 
 const (
@@ -41,21 +47,36 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 		//position := ""
 		// 遍历结构体的所有字段
 		for i := 0; i < elemType.NumField(); i++ {
+
 			// 获取当前字段的值和名称
 			fieldVal := val.Elem().Field(i)
 			tags := elemType.Field(i).Tag
-
-			positionTag := tags.Get(locationTag) //获取到参数位置
-			if len(positionTag) == 0 {
-				positionTag = defaultLocation
+			tagDefault := tags.Get(defaultTag)
+			NameMaps := parseAllTag(tagDefault)
+			positionTag := NameMaps[locate] //获取到参数位置
+			for j := 0; j < 2 && len(positionTag) != 0; j++ {
+				if j == 1 {
+					positionTag = defaultLocation
+				} else if j == 0 {
+					positionTag = tags.Get(locationTag)
+				}
 			}
 
-			paramName := tags.Get(param)
-			if len(paramName) == 0 { //获取到参数名字
-				paramName = copyNameToLitter(elemType.Field(i).Name)
+			paramName := NameMaps[paramNames]
+			for j := 0; j < 2 && len(paramName) != 0; j++ {
+				if j == 1 {
+					paramName = copyNameToLitter(elemType.Field(i).Name)
+				} else if j == 0 {
+					paramName = tags.Get(param)
+				}
 			}
+
 			value := ""
-			defaultVal := tags.Get(defaultValue)
+			defaultVal := NameMaps[defaultValueInTag]
+			if len(defaultVal) == 0 {
+				defaultVal = tags.Get(defaultTag)
+			}
+
 			switch positionTag { //获取到需要注入的参数的位置
 			case reqParam:
 				value = copyFromRequestParam(r, paramName)
@@ -117,6 +138,26 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 
 	// 不满足条件时，返回nil或根据业务逻辑进行错误处理
 	return nil
+}
+func parseAllTag(tag string) map[string]string {
+	res := make(map[string]string)
+	if len(tag) == 0 {
+		return res
+	}
+	tags := strings.Split(tag, ",")
+	for _, data := range tags {
+		if strings.TrimSpace(data) != "" {
+			KV := strings.Split(data, "=")
+			if len(KV) == 1 && len(res[param]) == 0 {
+				res[param] = KV[0]
+			} else if len(KV) == 2 {
+				res[KV[0]] = KV[1]
+			} else {
+				panic(ErrorInReflectTag)
+			}
+		}
+	}
+	return res
 }
 
 // OriginPath: 注册进route的原始路径
