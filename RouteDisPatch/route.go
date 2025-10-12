@@ -102,7 +102,7 @@ func formatPath(path string) string {
 	return path
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
-	if utils.IsPointer(param) {
+	if !utils.IsPointer(param) {
 		panic(ErrorParamType)
 	}
 	path = formatPath(path)
@@ -157,7 +157,7 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 		}
 	}
 	//进行正则匹配
-	if len(routes) > 1 {
+	if len(routes) > 1 || path == "/" {
 		for _, route := range r.NextRoute {
 			if route.NextRoute == nil && route.method != HttpMethod {
 				continue
@@ -291,7 +291,11 @@ func checkPointerTag(paramPointer interface{}) {
 		return
 	}
 	val := reflect.ValueOf(paramPointer)
-	elemType := val.Elem().Type()
+
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	elemType := val.Type()
 	for i := 0; i < elemType.NumField(); i++ {
 		tags := elemType.Field(i).Tag
 		tagDefault := tags.Get(defaultTag)
