@@ -1,7 +1,7 @@
 package cors
 
 import (
-	"github.com/wangshiben/QuicFrameWork/server/RouteDisPatch"
+	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,8 +17,8 @@ func TestDefaultCORS(t *testing.T) {
 	// 创建一个预检请求（OPTIONS）
 	req, _ := http.NewRequest("OPTIONS", "/", nil)
 	DisReq := RouteDisPatch.NewRequest(req)
-	DisReq.Header.Set("Origin", "http://example.com")
-	DisReq.Header.Set("Access-Control-Request-Method", "GET")
+	DisReq.Request.Header.Set("Origin", "http://example.com")
+	DisReq.Request.Header.Set("Access-Control-Request-Method", "GET")
 
 	// 创建一个响应记录器
 	rr := httptest.NewRecorder()
