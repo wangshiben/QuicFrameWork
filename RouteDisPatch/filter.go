@@ -59,7 +59,7 @@ func (r *Route) getFilter(path string, FilterChain []HttpFilter) []HttpFilter {
 	}
 
 	for in, item := range r.NextRoute {
-		if in == index { //防止重复添加
+		if in == index && exist { //防止重复添加
 			continue
 		}
 		switch item.path {

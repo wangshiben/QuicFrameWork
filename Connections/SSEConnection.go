@@ -59,6 +59,9 @@ func (s *SSEConnection) SendEvent(event *SSEEvent) error {
 // Write for user to write origin bytes to the client
 // return the number of bytes written and error if any
 func (s *SSEConnection) Write(bytes []byte) (int, error) {
+	if !isSSEPrefixValid(bytes) {
+		return len(bytes), s.SendEvent(&SSEEvent{Data: string(bytes)})
+	}
 	write, err := s.writer.Write(bytes)
 	if err != nil {
 		return 0, err

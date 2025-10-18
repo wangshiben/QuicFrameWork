@@ -25,7 +25,7 @@ type Route struct {
 	path                 string       //当前的路径
 	Handler              HttpHandle   //当前路径的处理函数
 	Filter               []HttpFilter //当前路径的过滤函数
-	NextRoute            []*Route     //下一个路径
+	NextRoute            []*Route     //下一个路径，与Index匹配
 	RequestParam         interface{}  //接收参数类型
 	DefaultParamPosition string       //默认接收参数位置
 	Index                map[string]int
@@ -50,7 +50,6 @@ func sseHandle(connectionFunc SSEHandle) HttpHandle {
 		w.WriteHeader(http.StatusOK)
 		conn, chanMsg, err := Connections.NewSSEConnection(w, r)
 		if err != nil {
-			fmt.Println("Error creating SSE connection:", err)
 			return
 		}
 		go func() {
@@ -68,12 +67,15 @@ func sseHandle(connectionFunc SSEHandle) HttpHandle {
 			http.Error(w, "Connection closed", http.StatusInternalServerError)
 		}
 		close(chanMsg)
-		fmt.Println("Connection closed")
 	}
 }
 func (r *Route) AddSSEHandler(path, HttpMethod string, handler SSEHandle) {
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, path, nil, reqParam, sseHandle(handler))
+	r.addHandler(path, HttpMethod, path, nil, "", sseHandle(handler))
+}
+func (r *Route) AddSSEHandlerWithReq(path, HttpMethod string, paramPointer interface{}, handler SSEHandle) {
+	path = formatPath(path)
+	r.addHandler(path, HttpMethod, path, paramPointer, "", sseHandle(handler))
 }
 func pageError() HttpHandle {
 	return func(w http.ResponseWriter, r *Request) {
