@@ -66,9 +66,10 @@ func (r *Request) ToJson(v any) error {
 	return err
 }
 
-func NewRequest(r *http.Request) *Request {
+func NewRequest(r *http.Request, w http.ResponseWriter) *Request {
 	return &Request{
 		req:     r,
 		Request: r,
+		writer:  w,
 	}
 }

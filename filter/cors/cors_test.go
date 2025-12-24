@@ -16,7 +16,7 @@ func TestDefaultCORS(t *testing.T) {
 
 	// 创建一个预检请求（OPTIONS）
 	req, _ := http.NewRequest("OPTIONS", "/", nil)
-	DisReq := RouteDisPatch.NewRequest(req)
+	DisReq := RouteDisPatch.NewRequest(req, nil)
 	DisReq.Request.Header.Set("Origin", "http://example.com")
 	DisReq.Request.Header.Set("Access-Control-Request-Method", "GET")
 

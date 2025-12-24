@@ -26,9 +26,9 @@ func main() {
 	newServer := server.NewServer("cert.pem", "cert.key", ":4445")
 	// 或: newServer := server.NewServer("", "", ":4445")使用自签名证书
 	//newServer := server.NewHttpServer(":4445")
-	newServer.AddFilter("/**", func(w http.ResponseWriter, r *RouteDisPatch.Request, next RouteDisPatch.Next) {
-		fmt.Println("拦截到了请求111111111111")
-	})
+	//newServer.AddFilter("/**", func(w http.ResponseWriter, r *RouteDisPatch.Request, next RouteDisPatch.Next) {
+	//	fmt.Println("拦截到了请求111111111111")
+	//})
 	// /bck/
 	newServer.AddHttpHandler("/bck/**", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		//param := r.Param
@@ -88,6 +88,16 @@ func main() {
 	})
 	newServer.Route.AddBodyParamHandler("/test/{name:3}", http.MethodGet, &TestPathParam{}, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		fmt.Println(r.Param.(*TestPathParam).Name)
+	})
+
+	newServer.AddHttpHandler("/test/header", http.MethodGet, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+		testStruct := &TestStruct{
+			Name:         "111",
+			RequestParam: "222",
+			Header:       "111",
+			Age:          10,
+		}
+		r.ToJson(testStruct)
 	})
 
 	newServer.Route.AddSSEHandler("/test/sse", http.MethodGet, func(conn *Connections.SSEConnection) {
