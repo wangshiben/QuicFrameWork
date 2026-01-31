@@ -215,7 +215,9 @@ func (s *Server) StartServer() {
 		panic(err.Error())
 	}
 	ln, err := s.listen()
-
+	if err != nil {
+		panic(err.Error())
+	}
 	go func() {
 		s.Serve(ln)
 	}()
