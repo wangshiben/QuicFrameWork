@@ -86,10 +86,10 @@ func (m *BaseServerSession) SetKeyToResponse() Session.ResponseSetSession {
 			SameSite: http.SameSiteLaxMode,
 			Path:     "/",
 			MaxAge:   0,
-			Domain:   "localhost",
+			Domain:   "",
 			Expires:  time.Now().Add(m.GetExpireTime()),
 		}
-		w.Header().Set("Set-Cookie", cookieIn.String())
+		http.SetCookie(w, cookieIn)
 	}
 }
 func (m *BaseServerSession) GenerateName() Session.GenerateName {
