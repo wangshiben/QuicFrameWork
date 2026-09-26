@@ -1,13 +1,15 @@
 package RouteDisPatch
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Writer"
 	"io"
 	"log"
 	"net/http"
 	"reflect"
-	"runtime"
+	"runtime/debug"
 )
 
 type Logger interface {
@@ -41,7 +43,6 @@ func newReqParam(param interface{}) interface{} {
 		return result.Addr().Interface()
 	}
 	panic("you have send an invalid value")
-	return nil
 }
 func (h *ServerHandler) httpHandler(w http.ResponseWriter, r *Request, route HttpHandle, FilterChain []HttpFilter) {
 	next := &Next{
@@ -72,16 +73,40 @@ func (n *Next) Next(w http.ResponseWriter, r *Request) {
 }
 
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
 	writer := Writer.NewWriter(w)
-	request := NewRequest(r, writer)
-	//request.GetSession()
 	defer func() {
 		_, err := writer.FinishWrite()
 		if err != nil {
-			return
+			log.Printf("failed to finish response: %v", err)
 		}
 	}()
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		if recovered == http.ErrAbortHandler {
+			panic(recovered)
+		}
+
+		writer.Reset()
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Del("Content-Length")
+		writer.WriteHeader(http.StatusInternalServerError)
+		message := fmt.Sprint(recovered)
+		if err, ok := recovered.(error); ok {
+			message = err.Error()
+		}
+		marshal, _ := json.Marshal(errorStruct{
+			Code: http.StatusInternalServerError,
+			Msg:  message,
+		})
+		_, _ = writer.Write(marshal)
+		log.Printf("Recovered from panic: %v\nStack Trace:\n%s", recovered, debug.Stack())
+	}()
+
+	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
+	request := NewRequest(r, writer)
 	if route.RequestParam == nil {
 		h.httpHandler(writer, request, route.Handler, filterChain)
 	} else {
@@ -90,36 +115,17 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data := newReqParam(route.RequestParam)
-		err = json.Unmarshal(all, data)
-		//if err != nil {
-		//	return
-		//}
+		if len(bytes.TrimSpace(all)) != 0 {
+			err = json.Unmarshal(all, data)
+			if err != nil {
+				http.Error(writer, "invalid JSON body", http.StatusBadRequest)
+				return
+			}
+		}
 		param := reflectBackToStructAsInterface(data, r, route.DefaultParamPosition, route.OriginPath)
 		request.Param = param
 		h.httpHandler(writer, request, route.Handler, filterChain)
-
 	}
-
-	defer func() {
-		errors := recover()
-		if errors != nil {
-			switch errors.(type) {
-			case error:
-				writer.Header().Set("Content-Type", "text/plain")  // 设置合适的Content-Type
-				writer.WriteHeader(http.StatusInternalServerError) //将报错内容写入响应体
-				marshal, _ := json.Marshal(errorStruct{
-					Code: http.StatusInternalServerError,
-					Msg:  errors.(error).Error(),
-				})
-				writer.Write(marshal)
-
-				stack := make([]byte, 1024)
-				length := runtime.Stack(stack, false)
-				log.Printf("Recovered from panic: %v\nStack Trace:\n%s", errors, stack[:length])
-			}
-		}
-	}()
-
 }
 
 type errorStruct struct {

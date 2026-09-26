@@ -30,7 +30,6 @@ type Server struct {
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
 	otherConfig  *Config
-	contextPool  sync.Pool
 }
 
 const (
@@ -89,34 +88,23 @@ func (s *Server) ServePacket(pc net.PacketConn) error {
 	}
 	return nil
 }
-func (s *Server) initContext(parent context.Context) *Context {
-	child := s.contextPool.Get().(*Context)
-	child.parent = parent
-	if len(child.valueMap) == 0 {
-		child.SetValue(GetSession, s.Session)
-		child.SetValue(InitSessionFunc, s.generateFunc)
-		child.SetValue(MaxSessionMemo, s.otherConfig.maxMemo)
-	}
-	return child
+func (s *Server) initContext(parent context.Context) context.Context {
+	ctx := context.WithValue(parent, GetSession, s.Session)
+	ctx = context.WithValue(ctx, InitSessionFunc, s.generateFunc)
+	return context.WithValue(ctx, MaxSessionMemo, s.otherConfig.maxMemo)
 }
 
 func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.initContext(r.Context())
-		r = r.WithContext(ctx)
+		r = r.WithContext(s.initContext(r.Context()))
 		s.quicServer.SetQUICHeaders(w.Header())
 		previousHandler.ServeHTTP(w, r)
-		ctx.reset()
-		s.contextPool.Put(ctx)
 	}
 }
 func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.initContext(r.Context())
-		r.WithContext(ctx)
+		r = r.WithContext(s.initContext(r.Context()))
 		previousHandler.ServeHTTP(w, r)
-		ctx.reset()
-		s.contextPool.Put(ctx)
 	}
 }
 func (s *Server) Close() error {
@@ -234,9 +222,7 @@ func initDefaultServer() *Server {
 		Server:       &http.Server{},
 		generateFunc: defaultSessionImp.NewMemoItemInterFace,
 		Session:      defaultSessionImp.NewServerSession(),
-		contextPool: sync.Pool{New: func() any {
-			return withParent(nil)
-		}},
+		otherConfig:  defaultConfig,
 	}
 }
 func (s *Server) StartHttpSerer() {

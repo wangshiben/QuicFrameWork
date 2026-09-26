@@ -10,16 +10,25 @@ type Context struct {
 	parent   context.Context
 }
 
-func (Context) Deadline() (deadline time.Time, ok bool) {
-	return
+func (c *Context) Deadline() (deadline time.Time, ok bool) {
+	if c.parent == nil {
+		return time.Time{}, false
+	}
+	return c.parent.Deadline()
 }
 
-func (Context) Done() <-chan struct{} {
-	return nil
+func (c *Context) Done() <-chan struct{} {
+	if c.parent == nil {
+		return nil
+	}
+	return c.parent.Done()
 }
 
 func (c *Context) Err() error {
-	return nil
+	if c.parent == nil {
+		return nil
+	}
+	return c.parent.Err()
 }
 
 func (c *Context) Value(key any) any {
@@ -28,11 +37,17 @@ func (c *Context) Value(key any) any {
 	case string:
 		Val := c.valueMap[key.(string)]
 		if Val == nil {
+			if c.parent == nil {
+				return nil
+			}
 			return c.parent.Value(key)
 		}
 		return Val
 	//break
 	default:
+		if c.parent == nil {
+			return nil
+		}
 		return c.parent.Value(key)
 		//return nil
 	}

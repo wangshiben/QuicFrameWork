@@ -2,9 +2,9 @@ package RouteDisPatch
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/consts"
-	"github.com/wangshiben/QuicFrameWork/size"
 	"net/http"
 )
 
@@ -25,27 +25,26 @@ func (r *Request) GetSession() (Session.ItemInterFace, error) {
 		return r.session, nil
 	}
 	context := r.req.Context()
-	value := context.Value(consts.GetSession)
-	initFunc := context.Value(consts.InitSessionFunc).(Session.GenerateItemInterFace)
-	maxMemo := context.Value(consts.MaxSessionMemo).(int)
-	sessionMap := value.(Session.ServerSession)
+	sessionMap, ok := context.Value(consts.GetSession).(Session.ServerSession)
+	if !ok || sessionMap == nil {
+		return nil, fmt.Errorf("session store is not configured in the request context")
+	}
+	initFunc, ok := context.Value(consts.InitSessionFunc).(Session.GenerateItemInterFace)
+	if !ok || initFunc == nil {
+		return nil, fmt.Errorf("session initializer is not configured in the request context")
+	}
 	key, exist := sessionMap.GetKeyFromRequest(r.req)
 	if exist {
 		item := sessionMap.GetItem(key)
 		if item != nil {
+			r.session = item
 			return item, nil
 		}
 	}
-	sessionMapSize := size.Of(sessionMap)
-	if sessionMapSize >= maxMemo {
-		sessionMap.CleanExpItem()
-	}
-	sessionMapSize = size.Of(sessionMap)
-	if sessionMapSize >= maxMemo {
-		return nil, Session.MaxMemo
-	}
 	key, session := sessionMap.GenerateName()(initFunc)
-	sessionMap.StoreSession(key, session)
+	if !sessionMap.StoreSession(key, session) {
+		return nil, fmt.Errorf("failed to store generated session")
+	}
 	sessionMap.SetKeyToResponse()(r.writer, key)
 	r.session = session
 	return session, nil

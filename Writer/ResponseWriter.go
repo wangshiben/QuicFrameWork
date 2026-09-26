@@ -29,6 +29,9 @@ func (w *Writer) Write(data []byte) (int, error) {
 func (w *Writer) FinishWrite() (int64, error) {
 	return w.buffer.WriteTo(w.writer)
 }
+func (w *Writer) Reset() {
+	w.buffer.Reset()
+}
 func (w *Writer) Flush() {
 	flusher, ok := w.writer.(http.Flusher)
 	if !ok {

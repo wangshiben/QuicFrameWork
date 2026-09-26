@@ -13,11 +13,13 @@ const quicSessionName = "quickSession"
 
 type BaseServerSession struct {
 	store   Session.StoreStruct
-	lock    sync.Mutex
+	lock    sync.RWMutex
 	expTime time.Duration
 }
 
 func (m *BaseServerSession) GetItem(key string) Session.ItemInterFace {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	res := m.store.GetItemInterFace(key)
 	if res != nil {
 		m.store.UpdateUsedTime(key, time.Now().Unix())
@@ -43,6 +45,8 @@ func (m *BaseServerSession) StoreSession(key any, val Session.ItemInterFace) boo
 	}
 }
 func (m *BaseServerSession) Close() error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	err := m.store.Close()
 	if err != nil {
 		return err
@@ -53,17 +57,25 @@ func (m *BaseServerSession) Close() error {
 
 // DestroySelf only Server exit called
 func (m *BaseServerSession) DestroySelf() bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.store = nil
 	return true
 }
 func (m *BaseServerSession) GetExpireTime() time.Duration {
+	m.lock.RLock()
+	expTime := m.expTime
+	m.lock.RUnlock()
+	if expTime != 0 {
+		return expTime
+	}
+
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	if m.expTime == 0 {
-		m.lock.Lock()
-		defer m.lock.Unlock()
 		m.expTime = DefaultExpTime
 	}
 	return m.expTime
-	//return DefaultExpTime
 }
 func (m *BaseServerSession) SetExpireTime(exp time.Duration) {
 	m.lock.Lock()
@@ -101,6 +113,8 @@ func (m *BaseServerSession) GenerateName() Session.GenerateName {
 
 // GetLastCallTime 上次调用的时间戳
 func (m *BaseServerSession) GetLastCallTime(key string) int64 {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	lastCallTime := m.store.GetLastCallTime(key)
 	if lastCallTime == 0 {
 		return -1
@@ -109,10 +123,12 @@ func (m *BaseServerSession) GetLastCallTime(key string) int64 {
 }
 
 func (m *BaseServerSession) CleanExpItem() {
-	expTime, now := m.expTime, time.Now().Unix()
+	expTime, now := m.GetExpireTime(), time.Now().Unix()
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	for key, val := range m.store.GetCallTimeMap() {
 		if now-val > int64(expTime.Seconds()) {
-			m.RemoveItem(key)
+			m.store.RemoveItem(key)
 		}
 	}
 }
@@ -122,13 +138,13 @@ func (m *BaseServerSession) GetNextTimePicker() time.Duration {
 func NewServerSession() *BaseServerSession {
 	return &BaseServerSession{
 		store: newDefaultStoreItem(),
-		lock:  sync.Mutex{},
+		lock:  sync.RWMutex{},
 	}
 }
 func NewServerSessionWithStore(store Session.StoreStruct) Session.ServerSession {
 	return &BaseServerSession{
 		store:   store,
-		lock:    sync.Mutex{},
+		lock:    sync.RWMutex{},
 		expTime: 0,
 	}
 }

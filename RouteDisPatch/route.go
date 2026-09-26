@@ -74,6 +74,7 @@ func (r *Route) AddSSEHandler(path, HttpMethod string, handler SSEHandle) {
 	r.addHandler(path, HttpMethod, path, nil, "", sseHandle(handler))
 }
 func (r *Route) AddSSEHandlerWithReq(path, HttpMethod string, paramPointer interface{}, handler SSEHandle) {
+	validateParamPointer(paramPointer)
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, paramPointer, "", sseHandle(handler))
 }
@@ -90,9 +91,7 @@ func (r *Route) AddHttpHandler(path, HttpMethod string, handler HttpHandle) {
 }
 
 func (r *Route) AddOriginHandler(path, HttpMethod string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
-	if utils.IsPointer(paramPointer) {
-		panic(ErrorParamType)
-	}
+	validateParamPointer(paramPointer)
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, paramPointer, defaultPosition, handler)
 }
@@ -104,16 +103,12 @@ func formatPath(path string) string {
 	return path
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
-	if !utils.IsPointer(param) {
-		panic(ErrorParamType)
-	}
+	validateParamPointer(param)
 	path = formatPath(path)
-	r.addHandler(path, HttpMethod, path, param, reqParam, handler)
+	r.addHandler(path, HttpMethod, path, param, body, handler)
 }
 func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
-	if utils.IsPointer(param) {
-		panic(ErrorParamType)
-	}
+	validateParamPointer(param)
 	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, param, header, handler)
 }
@@ -280,11 +275,11 @@ func (r *Route) addHandler(path, HttpMethod, OriginPath string, paramPointer int
 	} else {
 		nextIndex, exist := r.Index[routes[0]]
 		if exist {
-			r.NextRoute[nextIndex].addHandler(routes[1], HttpMethod, path, paramPointer, defaultPosition, handler)
+			r.NextRoute[nextIndex].addHandler(routes[1], HttpMethod, OriginPath, paramPointer, defaultPosition, handler)
 		} else {
 			r.NextRoute = append(r.NextRoute, &Route{path: routes[0], NextRoute: make([]*Route, 0), Index: make(map[string]int)})
 			r.Index[routes[0]] = len(r.NextRoute) - 1
-			r.NextRoute[len(r.NextRoute)-1].addHandler(routes[1], HttpMethod, path, paramPointer, defaultPosition, handler)
+			r.NextRoute[len(r.NextRoute)-1].addHandler(routes[1], HttpMethod, OriginPath, paramPointer, defaultPosition, handler)
 		}
 	}
 }
@@ -293,15 +288,24 @@ func checkPointerTag(paramPointer interface{}) {
 		return
 	}
 	val := reflect.ValueOf(paramPointer)
-
-	for val.Kind() == reflect.Ptr {
-		val = val.Elem()
+	if val.Kind() != reflect.Ptr || val.IsNil() || val.Elem().Kind() != reflect.Struct {
+		panic(ErrorParamType)
 	}
-	elemType := val.Type()
+	elemType := val.Elem().Type()
 	for i := 0; i < elemType.NumField(); i++ {
 		tags := elemType.Field(i).Tag
 		tagDefault := tags.Get(defaultTag)
 		parseAllTag(tagDefault)
+	}
+}
+
+func validateParamPointer(paramPointer interface{}) {
+	if !utils.IsPointer(paramPointer) {
+		panic(ErrorParamType)
+	}
+	value := reflect.ValueOf(paramPointer)
+	if value.IsNil() || value.Elem().Kind() != reflect.Struct {
+		panic(ErrorParamType)
 	}
 }
 func InitRoute() *Route {

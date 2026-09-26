@@ -94,6 +94,29 @@ func TestExpireTime(t *testing.T) {
 	}
 }
 
+func TestCleanupTickerDuration(t *testing.T) {
+	session := NewServerSession()
+	if got := session.GetNextTimePicker(); got != time.Minute {
+		t.Fatalf("cleanup ticker duration = %v, want %v", got, time.Minute)
+	}
+}
+
+func TestRecentlyUsedItemSurvivesStaleBucketCleanup(t *testing.T) {
+	session := NewServerSession()
+	session.SetExpireTime(2 * time.Minute)
+	item := &TestItem{Data: make(map[string]interface{})}
+	session.StoreSession("active", item)
+
+	session.CleanExpItem()
+	if session.GetItem("active") == nil {
+		t.Fatal("session disappeared before it could be refreshed")
+	}
+	session.CleanExpItem()
+	if session.GetItem("active") == nil {
+		t.Fatal("recently used session was removed from a stale bucket")
+	}
+}
+
 func TestGetKeyFromRequest(t *testing.T) {
 	session := NewServerSession()
 

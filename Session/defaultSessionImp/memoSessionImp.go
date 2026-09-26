@@ -8,7 +8,7 @@ import (
 type MemorySession struct {
 	MemoryPosition Session.MemoryPosition
 	sessionMap     map[string]interface{}
-	lock           sync.Mutex
+	lock           sync.RWMutex
 }
 
 func (m *MemorySession) GetMemoPosition() Session.MemoryPosition {
@@ -21,6 +21,8 @@ func (m *MemorySession) Store(key string, value interface{}) error {
 	return nil
 }
 func (m *MemorySession) GetStoreValue(Key string) (interface{}, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.sessionMap[Key], nil
 }
 func (m *MemorySession) RemoveStoreValue(Key string) (bool, error) {
@@ -33,7 +35,7 @@ func NewMemoItemInterFace() Session.ItemInterFace {
 	resp := MemorySession{
 		MemoryPosition: Session.Memo,
 		sessionMap:     make(map[string]interface{}),
-		lock:           sync.Mutex{},
+		lock:           sync.RWMutex{},
 	}
 	return &resp
 }

@@ -16,7 +16,7 @@ type Request[T any] func(work *QuickFrameWork[T])
 
 func PathAutowired[T interface{}](server *server.Server, path, method string, request Request[T]) {
 	t := new(T)
-	server.Route.AddBodyParamHandler(path, method, &t, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
+	server.Route.AddBodyParamHandler(path, method, t, func(w http.ResponseWriter, r *RouteDisPatch.Request) {
 		Param := r.Param.(*T)
 		q := QuickFrameWork[T]{
 			Writer:  w,

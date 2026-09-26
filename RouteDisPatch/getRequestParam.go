@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Parse interface {
@@ -53,28 +54,31 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 			tags := elemType.Field(i).Tag
 			tagDefault := tags.Get(defaultTag)
 			NameMaps := parseAllTag(tagDefault)
-			positionTag := NameMaps[locate] //获取到参数位置
-			for j := 0; j < 2 && len(positionTag) != 0; j++ {
-				if j == 1 {
-					positionTag = defaultLocation
-				} else if j == 0 {
-					positionTag = tags.Get(locationTag)
-				}
+			paramName := NameMaps[paramNames]
+			if paramName == "" {
+				paramName = tags.Get(param)
+			}
+			if paramName == "" {
+				paramName = copyNameToLitter(elemType.Field(i).Name)
 			}
 
-			paramName := NameMaps[paramNames]
-			for j := 0; j < 2 && len(paramName) != 0; j++ {
-				if j == 1 {
-					paramName = copyNameToLitter(elemType.Field(i).Name)
-				} else if j == 0 {
-					paramName = tags.Get(param)
+			positionTag := NameMaps[locate]
+			if positionTag == "" {
+				positionTag = tags.Get(locationTag)
+			}
+			if positionTag == "" {
+				if _, exists := pathMap[paramName]; exists {
+					positionTag = "path"
+				} else {
+					positionTag = defaultLocation
 				}
 			}
+			positionTag = strings.ToLower(strings.TrimSpace(positionTag))
 
 			value := ""
 			defaultVal := NameMaps[defaultValueInTag]
 			if len(defaultVal) == 0 {
-				defaultVal = tags.Get(defaultTag)
+				defaultVal = tags.Get(defaultValue)
 			}
 
 			switch positionTag { //获取到需要注入的参数的位置
@@ -82,6 +86,8 @@ func reflectBackToStructAsInterface(i interface{}, r *http.Request, defaultLocat
 				value = copyFromRequestParam(r, paramName)
 			case header:
 				value = copyFromHeader(r, paramName)
+			case body:
+				// JSON decoding has already populated body fields.
 			default: //Path传参
 				vals := pathMap[paramName]
 				for index, str := range vals {
@@ -147,11 +153,11 @@ func parseAllTag(tag string) map[string]string {
 	tags := strings.Split(tag, ",")
 	for _, data := range tags {
 		if strings.TrimSpace(data) != "" {
-			KV := strings.Split(data, "=")
-			if len(KV) == 1 && len(res[param]) == 0 {
-				res[param] = KV[0]
+			KV := strings.SplitN(data, "=", 2)
+			if len(KV) == 1 && len(res[paramNames]) == 0 {
+				res[paramNames] = strings.TrimSpace(KV[0])
 			} else if len(KV) == 2 {
-				res[KV[0]] = KV[1]
+				res[strings.TrimSpace(KV[0])] = strings.TrimSpace(KV[1])
 			} else {
 				panic(ErrorInReflectTag)
 			}
@@ -181,6 +187,9 @@ func getPathMap(OriginPath, RequestPath string) map[string][]string { //匹配�
 			RequestIndex++
 			continue
 		}
+		if RequestIndex < 0 || RequestIndex+step > len(RequestPaths) {
+			return mapPath
+		}
 		mapPath[copyNameToLitter(name)] = RequestPaths[RequestIndex : RequestIndex+step]
 		RequestIndex += step
 	}
@@ -202,8 +211,10 @@ func copyFromHeader(r *http.Request, ParamName string) string {
 }
 
 func copyNameToLitter(name string) string { //首字母小写
-	if name[0] >= 'A' && name[0] <= 'Z' {
-		return string(name[0]+32) + name[1:]
+	if name == "" {
+		return ""
 	}
-	return name
+	runes := []rune(name)
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
 }
