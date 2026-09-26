@@ -3,6 +3,7 @@ package RouteDisPatch
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Writer"
 	"io"
@@ -20,13 +21,19 @@ type Logger interface {
 }
 
 type ServerHandler struct {
-	Routes *Route
-	Log    *Logger
+	Routes              *Route
+	Log                 *Logger
+	MaxRequestBodyBytes int64
 }
+
+const DefaultMaxRequestBodyBytes int64 = 10 << 20
 
 func InitHandler() *ServerHandler {
 	route := InitRoute()
-	server := &ServerHandler{Routes: route}
+	server := &ServerHandler{
+		Routes:              route,
+		MaxRequestBodyBytes: DefaultMaxRequestBodyBytes,
+	}
 	return server
 }
 func newReqParam(param interface{}) interface{} {
@@ -89,7 +96,10 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(recovered)
 		}
 
-		writer.Reset()
+		log.Printf("Recovered from panic: %v\nStack Trace:\n%s", recovered, debug.Stack())
+		if !writer.Reset() {
+			return
+		}
 		writer.Header().Set("Content-Type", "application/json")
 		writer.Header().Del("Content-Length")
 		writer.WriteHeader(http.StatusInternalServerError)
@@ -102,7 +112,6 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Msg:  message,
 		})
 		_, _ = writer.Write(marshal)
-		log.Printf("Recovered from panic: %v\nStack Trace:\n%s", recovered, debug.Stack())
 	}()
 
 	route, filterChain := h.Routes.GetHttpHandler(r.URL.Path, r.Method)
@@ -110,8 +119,19 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if route.RequestParam == nil {
 		h.httpHandler(writer, request, route.Handler, filterChain)
 	} else {
+		maxBodyBytes := h.MaxRequestBodyBytes
+		if maxBodyBytes <= 0 {
+			maxBodyBytes = DefaultMaxRequestBodyBytes
+		}
+		r.Body = http.MaxBytesReader(writer, r.Body, maxBodyBytes)
 		all, err := io.ReadAll(r.Body)
 		if err != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				http.Error(writer, "request body too large", http.StatusRequestEntityTooLarge)
+			} else {
+				http.Error(writer, "failed to read request body", http.StatusBadRequest)
+			}
 			return
 		}
 		data := newReqParam(route.RequestParam)

@@ -2,4 +2,6 @@ package server
 
 import "github.com/wangshiben/QuicFrameWork/consts"
 
-var defaultConfig = &Config{maxMemo: consts.MB * 50}
+const DefaultMaxSessionMemoryBytes int64 = consts.MB * 50
+
+var defaultConfig = &Config{maxMemo: DefaultMaxSessionMemoryBytes}

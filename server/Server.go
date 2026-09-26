@@ -26,11 +26,21 @@ type Server struct {
 	h2Server     *http2.Server
 	listener     net.Listener
 	lock         sync.Mutex
+	closeOnce    sync.Once
+	closeErr     error
+	stopCh       chan struct{}
 	Route        *RouteDisPatch.Route
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
 	otherConfig  *Config
+	handler      *RouteDisPatch.ServerHandler
 }
+
+const (
+	DefaultReadHeaderTimeout = 5 * time.Second
+	DefaultReadTimeout       = 30 * time.Second
+	DefaultIdleTimeout       = 2 * time.Minute
+)
 
 const (
 	InitSessionFunc = consts.InitSessionFunc
@@ -108,19 +118,39 @@ func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 	}
 }
 func (s *Server) Close() error {
-	err := s.Server.Close()
-	if err != nil {
-		return err
-	}
-	err = s.Session.Close()
-	if err != nil {
-		return err
-	}
-	err = s.listener.Close()
-	if err != nil {
-		return err
-	}
-	return s.quicServer.Close()
+	s.closeOnce.Do(func() {
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+
+		var closeErrors []error
+		if s.Server != nil {
+			if err := s.Server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				closeErrors = append(closeErrors, err)
+			}
+		}
+		if s.Session != nil {
+			if err := s.Session.Close(); err != nil {
+				closeErrors = append(closeErrors, err)
+			}
+		}
+
+		s.lock.Lock()
+		listener := s.listener
+		s.lock.Unlock()
+		if listener != nil {
+			if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				closeErrors = append(closeErrors, err)
+			}
+		}
+		if s.quicServer != nil {
+			if err := s.quicServer.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				closeErrors = append(closeErrors, err)
+			}
+		}
+		s.closeErr = errors.Join(closeErrors...)
+	})
+	return s.closeErr
 }
 
 type tcpKeepAliveListener struct {
@@ -169,11 +199,20 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	config := loadTLS(TLSPem, TLSKey)
 	s := initDefaultServer()
 	s.Server = &http.Server{
-		Addr:      addr,
-		TLSConfig: config,
+		Addr:              addr,
+		TLSConfig:         config,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
 	handler := RouteDisPatch.InitHandler()
-	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
+	s.handler = handler
+	s.quicServer = &http3.Server{
+		TLSConfig:   config,
+		Addr:        addr,
+		Handler:     s.wrapWithSvcHeaders(handler),
+		IdleTimeout: DefaultIdleTimeout,
+	}
 	s.Server.Handler = s.wrapWithSvcHeaders(handler)
 	//s.quicServer.Handler=
 	s.Route = handler.Routes
@@ -186,9 +225,13 @@ func NewHttpServer(addr string) *Server {
 	handler := RouteDisPatch.InitHandler()
 	s := initDefaultServer()
 	s.Server = &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
+	s.handler = handler
 	s.Server.Handler = s.serveHttp(handler)
 	s.Route = handler.Routes
 	return s
@@ -223,6 +266,7 @@ func initDefaultServer() *Server {
 		generateFunc: defaultSessionImp.NewMemoItemInterFace,
 		Session:      defaultSessionImp.NewServerSession(),
 		otherConfig:  defaultConfig,
+		stopCh:       make(chan struct{}),
 	}
 }
 func (s *Server) StartHttpSerer() {

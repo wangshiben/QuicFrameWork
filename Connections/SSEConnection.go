@@ -3,8 +3,10 @@ package Connections
 import (
 	"github.com/wangshiben/QuicFrameWork/RequestX"
 	"github.com/wangshiben/QuicFrameWork/consts"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 const Close = consts.Close
@@ -15,6 +17,8 @@ type SSEConnection struct {
 	writer      http.ResponseWriter // http2 writer with flush interface
 	flusher     http.Flusher
 	isClosed    bool
+	mu          sync.Mutex
+	closeOnce   sync.Once
 }
 type SSEEvent struct {
 	Event string
@@ -59,24 +63,40 @@ func (s *SSEConnection) SendEvent(event *SSEEvent) error {
 // Write for user to write origin bytes to the client
 // return the number of bytes written and error if any
 func (s *SSEConnection) Write(bytes []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.isClosed {
+		return 0, net.ErrClosed
+	}
+	originalLength := len(bytes)
+	wrapped := false
 	if !isSSEPrefixValid(bytes) {
-		return len(bytes), s.SendEvent(&SSEEvent{Data: string(bytes)})
+		bytes = (&SSEEvent{Data: string(bytes)}).parse()
+		wrapped = true
 	}
 	write, err := s.writer.Write(bytes)
 	if err != nil {
 		return 0, err
 	}
 	s.flusher.Flush()
+	if wrapped {
+		return originalLength, nil
+	}
 	return write, nil
 }
 
 // Close for user to close the connection
 // If you want to close the connection, you should call this function(make sure your bowser and server support with http 2.0 or higher)
 func (s *SSEConnection) Close() error {
-	if !s.isClosed {
-		s.waitChannel <- Close
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
 		s.isClosed = true
-	}
+		s.mu.Unlock()
+		select {
+		case s.waitChannel <- Close:
+		default:
+		}
+	})
 	return nil
 }
 
@@ -86,7 +106,7 @@ func NewSSEConnection(w http.ResponseWriter, r RequestX.Request) (*SSEConnection
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return nil, nil, http.ErrNotSupported
 	}
-	c := make(chan string)
+	c := make(chan string, 1)
 	return &SSEConnection{
 		Request:     r,
 		waitChannel: c,

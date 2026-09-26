@@ -16,7 +16,11 @@ func (s *Server) ScheduledTask() {
 	runtime.ReadMemStats(&stats)
 
 	go func() {
-		ticker := time.NewTicker(s.Session.GetNextTimePicker())
+		interval := s.Session.GetNextTimePicker()
+		if interval <= 0 {
+			interval = time.Minute
+		}
+		ticker := time.NewTicker(interval)
 		//ticker := time.NewTicker(time.Second * 2)
 
 		defer ticker.Stop()
@@ -24,12 +28,15 @@ func (s *Server) ScheduledTask() {
 		// 创建一个接收操作系统信号的通道，用于处理中断（Ctrl+C）
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(sigChan)
 		flag := true
 
 		// 启动一个goroutine来处理ticker发送的时间
 
 		for flag {
 			select {
+			case <-s.stopCh:
+				return
 			case _ = <-sigChan:
 				flag = false
 				break
@@ -49,8 +56,11 @@ func (s *Server) closeListener() {
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		<-sigChan
-		s.Server.Close()
-		s.quicServer.Close()
+		defer signal.Stop(sigChan)
+		select {
+		case <-sigChan:
+			_ = s.Close()
+		case <-s.stopCh:
+		}
 	}()
 }

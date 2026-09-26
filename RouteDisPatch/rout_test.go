@@ -3,9 +3,12 @@ package RouteDisPatch
 import (
 	"encoding/json"
 	"errors"
+	"github.com/wangshiben/QuicFrameWork/Connections"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestRoute_AddHandler(t *testing.T) {
@@ -55,5 +58,71 @@ func TestHeaderParamHandlerAcceptsPointerAndEmptyBody(t *testing.T) {
 	}
 	if got == nil || got.TraceID != "trace-123" {
 		t.Fatalf("unexpected parameters: %+v", got)
+	}
+}
+
+func TestServeHTTPRejectsOversizedRequestBody(t *testing.T) {
+	type params struct {
+		Name string `json:"name"`
+	}
+
+	handler := InitHandler()
+	handler.MaxRequestBodyBytes = 4
+	called := false
+	handler.Routes.AddBodyParamHandler("/limited", http.MethodPost, &params{}, func(http.ResponseWriter, *Request) {
+		called = true
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/limited", strings.NewReader("12345"))
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+	if called {
+		t.Fatal("handler was called for an oversized request body")
+	}
+}
+
+func TestSSEHandlerPanicDoesNotBlockRequest(t *testing.T) {
+	handler := InitHandler()
+	handler.Routes.AddSSEHandler("/events", http.MethodGet, func(*Connections.SSEConnection) {
+		panic("sse callback failed")
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/events", nil))
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SSE request remained blocked after callback panic")
+	}
+}
+
+func TestStarRouteFallsBackToDoubleStar(t *testing.T) {
+	handler := InitHandler()
+
+	// ** should handle requests that cannot be completed by the * branch.
+	handler.Routes.AddHttpHandler("/a/**", http.MethodGet, func(w http.ResponseWriter, _ *Request) {
+		_, _ = w.Write([]byte("double-star"))
+	})
+	// Register the more specific * branch first. It only handles paths ending in /x.
+	handler.Routes.AddHttpHandler("/a/*/y", http.MethodGet, func(w http.ResponseWriter, _ *Request) {
+		_, _ = w.Write([]byte("star"))
+	})
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/a/b/y", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %q", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if got, want := recorder.Body.String(), "star"; got != want {
+		t.Fatalf("body = %q, want %q", got, want)
 	}
 }

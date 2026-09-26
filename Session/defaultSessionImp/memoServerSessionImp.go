@@ -1,6 +1,7 @@
 package defaultSessionImp
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"net/http"
@@ -35,14 +36,44 @@ func (m *BaseServerSession) RemoveItem(key string) bool {
 func (m *BaseServerSession) StoreSession(key any, val Session.ItemInterFace) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	switch key.(type) {
-	case string:
-		m.store.StoreItemInterFace(key.(string), val)
-		m.store.UpdateUsedTime(key.(string), time.Now().Unix())
-		return true
-	default:
+	keyString, ok := key.(string)
+	if !ok {
 		return false
 	}
+	m.store.StoreItemInterFace(keyString, val)
+	m.store.UpdateUsedTime(keyString, time.Now().Unix())
+	return true
+}
+func (m *BaseServerSession) StoreSessionWithinLimit(key any, val Session.ItemInterFace, maxBytes int64) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	keyString, ok := key.(string)
+	if !ok {
+		return fmt.Errorf("session key must be a string")
+	}
+	if maxBytes > 0 {
+		prospectiveUsage := m.memoryUsageLocked() + estimatedSessionEntrySize(keyString, val)
+		if prospectiveUsage > maxBytes {
+			return Session.MaxMemo
+		}
+	}
+	m.store.StoreItemInterFace(keyString, val)
+	m.store.UpdateUsedTime(keyString, time.Now().Unix())
+	return nil
+}
+func (m *BaseServerSession) MemoryUsage() int64 {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.memoryUsageLocked()
+}
+func (m *BaseServerSession) memoryUsageLocked() int64 {
+	if reporter, ok := m.store.(Session.MemoryUsageReporter); ok {
+		return reporter.MemoryUsage()
+	}
+	return 0
+}
+func estimatedSessionEntrySize(key string, val Session.ItemInterFace) int64 {
+	return 128 + int64(len(key))*3 + Session.MemoryUsageOf(val)
 }
 func (m *BaseServerSession) Close() error {
 	m.lock.Lock()

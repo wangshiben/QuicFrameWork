@@ -3,7 +3,6 @@ package RouteDisPatch
 import (
 	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Connections"
-	"github.com/wangshiben/QuicFrameWork/consts"
 	"github.com/wangshiben/QuicFrameWork/utils"
 	"net/http"
 	"reflect"
@@ -48,34 +47,26 @@ func sseHandle(connectionFunc SSEHandle) HttpHandle {
 		w.Header().Set("Connection", "keep-alive")
 		// Make sure to set the content type
 		w.WriteHeader(http.StatusOK)
-		conn, chanMsg, err := Connections.NewSSEConnection(w, r)
+		conn, _, err := Connections.NewSSEConnection(w, r)
 		if err != nil {
 			return
 		}
-		go func() {
-			defer func() {
-				err := recover()
-				if err != nil {
-					fmt.Println("panic:", err)
-				}
-			}()
-			connectionFunc(conn)
-			conn.Close()
-		}()
-		msg := <-chanMsg
-		if msg != consts.Close {
-			http.Error(w, "Connection closed", http.StatusInternalServerError)
+		// WriteHeader is buffered so ordinary handlers can still be replaced by
+		// a 500 response after a panic. SSE must explicitly commit its headers.
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
 		}
-		close(chanMsg)
+		defer conn.Close()
+		connectionFunc(conn)
 	}
 }
 func (r *Route) AddSSEHandler(path, HttpMethod string, handler SSEHandle) {
-	path = formatPath(path)
+	path = formatRoutePath(path)
 	r.addHandler(path, HttpMethod, path, nil, "", sseHandle(handler))
 }
 func (r *Route) AddSSEHandlerWithReq(path, HttpMethod string, paramPointer interface{}, handler SSEHandle) {
+	path = formatRoutePath(path)
 	validateParamPointer(paramPointer)
-	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, paramPointer, "", sseHandle(handler))
 }
 func pageError() HttpHandle {
@@ -86,38 +77,41 @@ func pageError() HttpHandle {
 	}
 }
 func (r *Route) AddHttpHandler(path, HttpMethod string, handler HttpHandle) {
-	path = formatPath(path)
+	path = formatRoutePath(path)
 	r.addHandler(path, HttpMethod, path, nil, "", handler)
 }
 
 func (r *Route) AddOriginHandler(path, HttpMethod string, paramPointer interface{}, defaultPosition string, handler HttpHandle) {
+	path = formatRoutePath(path)
 	validateParamPointer(paramPointer)
-	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, paramPointer, defaultPosition, handler)
 }
+func formatRoutePath(path string) string {
+	if strings.TrimSpace(path) == "" {
+		panic(ErrorInvalidRoutePath)
+	}
+	return formatPath(path)
+}
 func formatPath(path string) string {
-	if path[0] == '/' {
+	if len(path) != 0 && path[0] == '/' {
 		runes := []rune(path)
 		path = string(runes[1:])
 	}
 	return path
 }
 func (r *Route) AddBodyParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
+	path = formatRoutePath(path)
 	validateParamPointer(param)
-	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, param, body, handler)
 }
 func (r *Route) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler HttpHandle) {
+	path = formatRoutePath(path)
 	validateParamPointer(param)
-	path = formatPath(path)
 	r.addHandler(path, HttpMethod, path, param, header, handler)
 }
 
 func (r *Route) GetHttpHandler(path, HttpMethod string) (*Route, []HttpFilter) {
-	if path[0] == '/' {
-		runes := []rune(path)
-		path = string(runes[1:])
-	}
+	path = formatPath(path)
 	FilterChain := make([]HttpFilter, 0)
 	return r.GetHandler(path, HttpMethod), r.getFilter(path, FilterChain)
 }
@@ -155,19 +149,23 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 	}
 	//进行正则匹配
 	if len(routes) > 1 || path == "/" {
+		var doubleStarRoute *Route
 		for _, route := range r.NextRoute {
 			if route.NextRoute == nil && route.method != HttpMethod {
 				continue
 			}
 			switch route.path {
 			case "*":
-				return route.GetHandler(routes[1], HttpMethod)
+				handler := route.GetHandler(routes[1], HttpMethod)
+				if handler.Status != http.StatusNotFound {
+					return handler
+				}
+				continue
 			case "**":
 				if route.Handler != nil {
-					return route
-				} else {
-					continue
+					doubleStarRoute = route
 				}
+				continue
 
 			}
 			//TODO:修改匹配模式
@@ -209,7 +207,11 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 				continue
 			}
 		}
+		if doubleStarRoute != nil {
+			return doubleStarRoute
+		}
 	} else {
+		var doubleStarRoute *Route
 		for _, route := range r.NextRoute {
 			if route.NextRoute == nil && route.method != HttpMethod {
 				continue
@@ -218,15 +220,13 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 			case "*":
 				if route.Handler != nil {
 					return route
-				} else {
-					return pageNotFund()
 				}
+				continue
 			case "**":
 				if route.Handler != nil {
-					return route
-				} else {
-					return pageNotFund()
+					doubleStarRoute = route
 				}
+				continue
 			}
 			//TODO:修改匹配模式
 			//{name:2}->表示匹配从现在开始的往下两层路径,作为参数name的值
@@ -248,6 +248,9 @@ func (r *Route) GetHandler(path, HttpMethod string) *Route {
 			} else {
 				continue
 			}
+		}
+		if doubleStarRoute != nil {
+			return doubleStarRoute
 		}
 	}
 

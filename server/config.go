@@ -1,5 +1,5 @@
 package server
 
 type Config struct {
-	maxMemo int
+	maxMemo int64
 }
