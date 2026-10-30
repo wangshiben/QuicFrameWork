@@ -9,8 +9,10 @@ import (
 )
 
 type Writer struct {
-	writer http.ResponseWriter
-	buffer bytes.Buffer
+	writer     http.ResponseWriter
+	buffer     bytes.Buffer
+	statusCode int
+	committed  bool
 }
 
 func (w *Writer) Header() http.Header {
@@ -18,34 +20,52 @@ func (w *Writer) Header() http.Header {
 }
 
 func (w *Writer) WriteHeader(statusCode int) {
-	w.writer.WriteHeader(statusCode)
-	w.Flush()
+	if w.statusCode != 0 || w.committed {
+		return
+	}
+	w.statusCode = statusCode
 }
 
 func (w *Writer) Write(data []byte) (int, error) {
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
 	return w.buffer.Write(data)
 }
 
 func (w *Writer) FinishWrite() (int64, error) {
+	w.commitHeader()
 	return w.buffer.WriteTo(w.writer)
 }
-func (w *Writer) Reset() {
+func (w *Writer) Reset() bool {
 	w.buffer.Reset()
+	if w.committed {
+		return false
+	}
+	w.statusCode = 0
+	return true
+}
+func (w *Writer) commitHeader() {
+	if w.committed {
+		return
+	}
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
+	w.writer.WriteHeader(w.statusCode)
+	w.committed = true
 }
 func (w *Writer) Flush() {
 	flusher, ok := w.writer.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return
 	}
-	//if w.buffer.Len() != 0 {
+	w.commitHeader()
 	to, err := w.buffer.WriteTo(w.writer)
 	if err != nil {
 		fmt.Printf("Error writing to response: %v", err)
 		fmt.Printf("Written bytes: %d", to)
 	}
-	//}
-
 	flusher.Flush()
 }
 func (w *Writer) Hijack() (net.Conn, *bufio.ReadWriter, error) {

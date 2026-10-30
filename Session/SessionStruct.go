@@ -18,6 +18,19 @@ type GenerateItemInterFace func() ItemInterFace
 type ResponseSetSession func(w http.ResponseWriter, Key string)
 type GenerateName func(initFunc GenerateItemInterFace) (string, ItemInterFace)
 
+// MemoryUsageReporter is implemented by in-memory session components that can
+// report their current memory usage without unsafe concurrent map traversal.
+type MemoryUsageReporter interface {
+	MemoryUsage() int64
+}
+
+// MemoryLimitedServerSession atomically checks and stores a newly generated
+// session. It is optional so custom ServerSession implementations stay valid.
+type MemoryLimitedServerSession interface {
+	ServerSession
+	StoreSessionWithinLimit(key any, val ItemInterFace, maxBytes int64) error
+}
+
 // ServerSession 类似于Java中的ApplicationContext中的SessionMap
 type ServerSession interface {
 	//GetMemoPosition() MemoryPosition

@@ -30,3 +30,15 @@ func (s *Server) AddBodyParamHandler(path, HttpMethod string, param interface{},
 func (s *Server) AddHeaderParamHandler(path, HttpMethod string, param interface{}, handler RouteDisPatch.HttpHandle) {
 	s.Route.AddHeaderParamHandler(path, HttpMethod, param, handler)
 }
+
+func (s *Server) SetMaxRequestBodyBytes(limit int64) {
+	if limit > 0 && s.handler != nil {
+		s.handler.MaxRequestBodyBytes = limit
+	}
+}
+
+func (s *Server) SetMaxSessionMemoryBytes(limit int64) {
+	if limit > 0 {
+		s.otherConfig = &Config{maxMemo: limit}
+	}
+}

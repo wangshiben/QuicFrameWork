@@ -1,6 +1,7 @@
 package CircularQueueSessionImp
 
 import (
+	"errors"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/Session/defaultSessionImp"
 	"net/http"
@@ -183,5 +184,23 @@ func TestExpiredItemCleanup(t *testing.T) {
 	// 验证过期后是否被清理
 	if session.GetItem(key) != nil {
 		t.Error("Item still exists after expiration time")
+	}
+}
+
+func TestStoreSessionWithinMemoryLimit(t *testing.T) {
+	session := NewServerSession()
+	item := defaultSessionImp.NewMemoItemInterFace()
+	if err := item.Store("payload", make([]byte, 256)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := session.StoreSessionWithinLimit("large", item, 64); !errors.Is(err, Session.MaxMemo) {
+		t.Fatalf("StoreSessionWithinLimit error = %v, want %v", err, Session.MaxMemo)
+	}
+	if session.GetItem("large") != nil {
+		t.Fatal("oversized session was stored")
+	}
+	if err := session.StoreSessionWithinLimit("large", item, 4096); err != nil {
+		t.Fatalf("session within limit was rejected: %v", err)
 	}
 }

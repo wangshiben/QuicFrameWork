@@ -18,7 +18,7 @@ func (r *Route) ensureRouteExists(pathSegment string) (*Route, bool) {
 	return r.NextRoute[index], true
 }
 func (r *Route) AddFilter(path string, filter HttpFilter) {
-	format := formatPath(path)
+	format := formatRoutePath(path)
 	r.addFilter(format, filter)
 }
 

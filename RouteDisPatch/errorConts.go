@@ -7,6 +7,7 @@ func (p paramError) Error() string {
 }
 
 const (
-	ErrorParamType    = "paramPointer must be a pointer"
-	ErrorInReflectTag = "You have wrong in a request Param reflect pointer"
+	ErrorParamType        = "paramPointer must be a pointer"
+	ErrorInReflectTag     = "You have wrong in a request Param reflect pointer"
+	ErrorInvalidRoutePath = "route path must not be empty"
 )

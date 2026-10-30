@@ -2,6 +2,7 @@ package RouteDisPatch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/consts"
@@ -18,7 +19,7 @@ type Request struct {
 	session Session.ItemInterFace
 }
 
-// TODO: 当session大小超出的时候要throw ERROR
+// GetSession returns an existing session or creates one within the configured memory limit.
 func (r *Request) GetSession() (Session.ItemInterFace, error) {
 	//防止多处函数引用导致session重复读取
 	if r.session != nil {
@@ -42,7 +43,17 @@ func (r *Request) GetSession() (Session.ItemInterFace, error) {
 		}
 	}
 	key, session := sessionMap.GenerateName()(initFunc)
-	if !sessionMap.StoreSession(key, session) {
+	maxMemory, _ := context.Value(consts.MaxSessionMemo).(int64)
+	if limitedSession, ok := sessionMap.(Session.MemoryLimitedServerSession); ok && maxMemory > 0 {
+		err := limitedSession.StoreSessionWithinLimit(key, session, maxMemory)
+		if errors.Is(err, Session.MaxMemo) {
+			sessionMap.CleanExpItem()
+			err = limitedSession.StoreSessionWithinLimit(key, session, maxMemory)
+		}
+		if err != nil {
+			return nil, err
+		}
+	} else if !sessionMap.StoreSession(key, session) {
 		return nil, fmt.Errorf("failed to store generated session")
 	}
 	sessionMap.SetKeyToResponse()(r.writer, key)

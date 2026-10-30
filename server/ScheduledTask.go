@@ -31,6 +31,8 @@ func (s *Server) ScheduledTask() {
 				select {
 				case <-s.taskCtx.Done():
 					return
+				case <-s.stopCh:
+					return
 				case <-ticker.C:
 					session.CleanExpItem()
 				}

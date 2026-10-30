@@ -29,6 +29,16 @@ func (m *CircularQueueSession) StoreSession(key any, val Session.ItemInterFace) 
 	defer m.lock.Unlock()
 	return m.Base.StoreSession(key, val)
 }
+func (m *CircularQueueSession) StoreSessionWithinLimit(key any, val Session.ItemInterFace, maxBytes int64) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	return m.Base.StoreSessionWithinLimit(key, val, maxBytes)
+}
+func (m *CircularQueueSession) MemoryUsage() int64 {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	return m.Base.MemoryUsage()
+}
 
 // DestroySelf only Server exit called
 func (m *CircularQueueSession) DestroySelf() bool {

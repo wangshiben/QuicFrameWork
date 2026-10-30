@@ -48,6 +48,19 @@ func (d *defaultStoreImp) GetCallTimeMap() map[string]int64 {
 	}
 	return result
 }
+func (d *defaultStoreImp) MemoryUsage() int64 {
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+
+	usage := int64(len(d.store)+len(d.callTimeMap)) * 32
+	for key, item := range d.store {
+		usage += int64(len(key)) + Session.MemoryUsageOf(item)
+	}
+	for key := range d.callTimeMap {
+		usage += int64(len(key)) + 8
+	}
+	return usage
+}
 func (d *defaultStoreImp) Close() error {
 	d.lock.Lock()
 	defer d.lock.Unlock()

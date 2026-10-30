@@ -79,6 +79,25 @@ func (c *CircularQueueStore) GetCallTimeMap() map[string]int64 {
 
 	return mapResult
 }
+func (c *CircularQueueStore) MemoryUsage() int64 {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	usage := int64(len(c.store)+len(c.callTimeMap)) * 32
+	for key, item := range c.store {
+		usage += int64(len(key)) + Session.MemoryUsageOf(item)
+	}
+	for key, indexes := range c.callTimeMap {
+		usage += int64(len(key)) + int64(len(indexes))*8
+	}
+	for _, item := range c.queue {
+		usage += 16
+		for _, key := range item.Keys {
+			usage += int64(len(key)) + 16
+		}
+	}
+	return usage
+}
 func (c *CircularQueueStore) RemoveCurrentIndex() {
 	c.lock.Lock()
 	defer c.lock.Unlock()

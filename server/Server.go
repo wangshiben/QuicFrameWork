@@ -31,6 +31,9 @@ type Server struct {
 	lock         sync.Mutex
 	started      bool
 	shuttingDown bool
+	closeOnce    sync.Once
+	closeErr     error
+	stopCh       chan struct{}
 	Route        *RouteDisPatch.Route
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
@@ -41,7 +44,14 @@ type Server struct {
 	taskWG       sync.WaitGroup
 	sessionOnce  sync.Once
 	sessionErr   error
+	handler      *RouteDisPatch.ServerHandler
 }
+
+const (
+	DefaultReadHeaderTimeout = 5 * time.Second
+	DefaultReadTimeout       = 30 * time.Second
+	DefaultIdleTimeout       = 2 * time.Minute
+)
 
 const (
 	InitSessionFunc = consts.InitSessionFunc
@@ -141,15 +151,36 @@ func (s *Server) Close() error {
 	s.lock.Lock()
 	s.shuttingDown = true
 	s.lock.Unlock()
-	var errs []error
-	if s.Server != nil {
-		errs = append(errs, s.Server.Close())
-	}
-	if s.QUIC != nil {
-		errs = append(errs, s.QUIC.Close())
-	}
-	errs = append(errs, s.closeSession())
-	return errors.Join(errs...)
+	s.closeOnce.Do(func() {
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+
+		var errs []error
+		if s.Server != nil {
+			if err := s.Server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errs = append(errs, err)
+			}
+		}
+		if s.QUIC != nil {
+			if err := s.QUIC.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				errs = append(errs, err)
+			}
+		}
+		s.lock.Lock()
+		listener := s.listener
+		s.lock.Unlock()
+		if listener != nil {
+			if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				errs = append(errs, err)
+			}
+		}
+		if err := s.closeSession(); err != nil {
+			errs = append(errs, err)
+		}
+		s.closeErr = errors.Join(errs...)
+	})
+	return s.closeErr
 }
 
 // Shutdown drains HTTP and every QUIC protocol concurrently. Expiring ctx
@@ -238,11 +269,20 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	config := loadTLS(TLSPem, TLSKey)
 	s := initDefaultServer()
 	s.Server = &http.Server{
-		Addr:      addr,
-		TLSConfig: config,
+		Addr:              addr,
+		TLSConfig:         config,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
 	handler := RouteDisPatch.InitHandler()
-	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
+	s.handler = handler
+	s.quicServer = &http3.Server{
+		TLSConfig:   config,
+		Addr:        addr,
+		Handler:     s.wrapWithSvcHeaders(handler),
+		IdleTimeout: DefaultIdleTimeout,
+	}
 	s.QUIC = NewQUICEndpoint(config, nil)
 	_ = s.RegisterQUICProtocol(NewHTTP3Protocol(s.quicServer))
 	s.Server.Handler = s.wrapWithSvcHeaders(handler)
@@ -257,9 +297,13 @@ func NewHttpServer(addr string) *Server {
 	handler := RouteDisPatch.InitHandler()
 	s := initDefaultServer()
 	s.Server = &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
+	s.handler = handler
 	s.Server.Handler = s.serveHttp(handler)
 	s.Route = handler.Routes
 	return s
@@ -338,6 +382,7 @@ func initDefaultServer() *Server {
 		otherConfig:  defaultConfig,
 		taskCtx:      taskCtx,
 		taskCancel:   taskCancel,
+		stopCh:       make(chan struct{}),
 	}
 }
 func (s *Server) StartHttpSerer() {
