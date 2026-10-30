@@ -20,6 +20,10 @@
 2. 请求报错捕捉JSON输出
 3. 支持自定义签名证书
 4. 根据request结构体自动注入内容,支持自定义request位置和默认值以及参数重命名
+5. HTTP/3 与开发者注册的原生 QUIC 协议共享同一个 UDP 端口，通过 ALPN 分流
+
+原生 QUIC 使用新增的 `RegisterQUICProtocol` / `QUICProtocolFunc` API，现有公开函数及接口签名保持兼容。详见[设计、使用和可运行示例](docs/native-quic.md)，示例同时支持 `h3`、`echo/1` 和 `upper/1`。
+
 ## 快速开始
 
 1. 引入:

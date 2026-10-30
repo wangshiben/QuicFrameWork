@@ -5,31 +5,42 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/quic-go/quic-go/http3"
 	"github.com/wangshiben/QuicFrameWork/RouteDisPatch"
 	"github.com/wangshiben/QuicFrameWork/Session"
 	"github.com/wangshiben/QuicFrameWork/Session/defaultSessionImp"
 	"github.com/wangshiben/QuicFrameWork/consts"
-	"golang.org/x/net/http2"
-	"log"
-	"net"
-	"net/http"
-	"os"
-	"sync"
-	"time"
 )
 
-// Server is the HTTP server implementation.
+// Server serves HTTP over TCP and dispatches QUIC application protocols over UDP.
 type Server struct {
 	Server       *http.Server
+	QUIC         *QUICEndpoint
 	quicServer   *http3.Server
-	h2Server     *http2.Server
 	listener     net.Listener
 	lock         sync.Mutex
+	started      bool
+	shuttingDown bool
 	Route        *RouteDisPatch.Route
 	Session      Session.ServerSession
 	generateFunc Session.GenerateItemInterFace
 	otherConfig  *Config
+	taskCtx      context.Context
+	taskCancel   context.CancelFunc
+	taskOnce     sync.Once
+	taskWG       sync.WaitGroup
+	sessionOnce  sync.Once
+	sessionErr   error
 }
 
 const (
@@ -44,23 +55,19 @@ func (s *Server) listen() (net.Listener, error) {
 	if s.Server == nil {
 		return nil, fmt.Errorf("Server field is nil")
 	}
+	if s.Server.TLSConfig == nil {
+		return nil, errors.New("TLS configuration is missing; check certificate and key")
+	}
 
 	ln, err := net.Listen("tcp", s.Server.Addr)
+	if err != nil {
+		return nil, err
+	}
 	if tcpLn, ok := ln.(*net.TCPListener); ok {
 		ln = tcpKeepAliveListener{TCPListener: tcpLn}
 	}
 
-	return tls.NewListener(ln, s.Server.TLSConfig), err
-}
-
-// listenPacket creates udp connection for QUIC if it is enabled,
-func (s *Server) listenPacket() (net.PacketConn, error) {
-	udpAddr, err := net.ResolveUDPAddr("udp", s.Server.Addr)
-	if err != nil {
-		return nil, err
-	}
-	return net.ListenUDP("udp", udpAddr)
-
+	return tls.NewListener(ln, s.Server.TLSConfig), nil
 }
 
 // Serve serves requests on ln. It blocks until ln is closed.
@@ -73,20 +80,33 @@ func (s *Server) Serve(ln net.Listener) error {
 	if errors.Is(err, http.ErrServerClosed) {
 		err = nil
 	}
-	if s.quicServer != nil {
-		s.quicServer.Close()
+	s.lock.Lock()
+	closeQUIC := !s.shuttingDown
+	s.lock.Unlock()
+	if closeQUIC && s.QUIC != nil {
+		// Preserve Serve's original coupled close behavior for callers using
+		// separate TCP/UDP Serve methods. A coordinated Shutdown drains QUIC.
+		_ = s.QUIC.Close()
 	}
 	return err
 }
 
-// ServePacket serves QUIC requests on pc until it is closed.
+// ServePacket serves every registered QUIC protocol on pc. The caller owns pc;
+// keep it open until Shutdown completes, then close it.
 func (s *Server) ServePacket(pc net.PacketConn) error {
-	if s.quicServer != nil {
-		fmt.Println("QUIC server is already running")
-		err := s.quicServer.Serve(pc.(*net.UDPConn))
-		return fmt.Errorf("serving QUIC connections: %v", err)
+	if s.QUIC == nil {
+		return nil // Preserve the original HTTP-only ServePacket no-op.
 	}
-	return nil
+	return s.QUIC.Serve(context.Background(), pc)
+}
+
+// RegisterQUICProtocol adds a developer-defined ALPN and connection handler.
+// NewServer registers h3 first. Duplicate names (including h3) are rejected.
+func (s *Server) RegisterQUICProtocol(protocol QUICProtocol) error {
+	if s.QUIC == nil {
+		return errors.New("QUIC endpoint is not configured")
+	}
+	return s.QUIC.RegisterProtocol(protocol)
 }
 func (s *Server) initContext(parent context.Context) context.Context {
 	ctx := context.WithValue(parent, GetSession, s.Session)
@@ -97,7 +117,17 @@ func (s *Server) initContext(parent context.Context) context.Context {
 func (s *Server) wrapWithSvcHeaders(previousHandler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(s.initContext(r.Context()))
-		s.quicServer.SetQUICHeaders(w.Header())
+		// ServeQUICConn does not register a listener with http3.Server, so
+		// advertise the shared endpoint's actual port, including when using :0.
+		if s.QUIC != nil {
+			if addr := s.QUIC.Addr(); addr != nil {
+				if _, port, err := net.SplitHostPort(addr.String()); err == nil {
+					if number, err := strconv.Atoi(port); err == nil && number > 0 {
+						w.Header().Add("Alt-Svc", fmt.Sprintf(`h3=":%d"; ma=2592000`, number))
+					}
+				}
+			}
+		}
 		previousHandler.ServeHTTP(w, r)
 	}
 }
@@ -108,19 +138,61 @@ func (s *Server) serveHttp(previousHandler http.Handler) http.HandlerFunc {
 	}
 }
 func (s *Server) Close() error {
-	err := s.Server.Close()
-	if err != nil {
-		return err
+	s.lock.Lock()
+	s.shuttingDown = true
+	s.lock.Unlock()
+	var errs []error
+	if s.Server != nil {
+		errs = append(errs, s.Server.Close())
 	}
-	err = s.Session.Close()
-	if err != nil {
-		return err
+	if s.QUIC != nil {
+		errs = append(errs, s.QUIC.Close())
 	}
-	err = s.listener.Close()
+	errs = append(errs, s.closeSession())
+	return errors.Join(errs...)
+}
+
+// Shutdown drains HTTP and every QUIC protocol concurrently. Expiring ctx
+// forces connection closure. Signal handling belongs in the calling program.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.lock.Lock()
+	s.shuttingDown = true
+	s.lock.Unlock()
+	results := make(chan error, 2)
+	go func() {
+		if s.Server == nil {
+			results <- nil
+			return
+		}
+		results <- s.Server.Shutdown(ctx)
+	}()
+	go func() {
+		if s.QUIC == nil {
+			results <- nil
+			return
+		}
+		results <- s.QUIC.Shutdown(ctx)
+	}()
+	err := errors.Join(<-results, <-results)
 	if err != nil {
-		return err
+		return errors.Join(err, s.Close())
 	}
-	return s.quicServer.Close()
+	return s.closeSession()
+}
+
+func (s *Server) closeSession() error {
+	s.sessionOnce.Do(func() {
+		s.lock.Lock()
+		if s.taskCancel != nil {
+			s.taskCancel()
+		}
+		s.lock.Unlock()
+		s.taskWG.Wait()
+		if s.Session != nil {
+			s.sessionErr = s.Session.Close()
+		}
+	})
+	return s.sessionErr
 }
 
 type tcpKeepAliveListener struct {
@@ -150,11 +222,8 @@ func loadTLS(TLSPem, TLSKey string) *tls.Config {
 	}
 
 	config := &tls.Config{
-		// MinVersion:               tls.VersionTLS13,
-		// CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		// PreferServerCipherSuites: true,
 		Certificates: []tls.Certificate{cer},
-		NextProtos:   []string{"h3", "h2", "h3-29"},
+		NextProtos:   []string{"h2", "http/1.1"},
 	}
 	return config
 }
@@ -174,6 +243,8 @@ func NewServer(TLSPem, TLSKey, addr string) *Server {
 	}
 	handler := RouteDisPatch.InitHandler()
 	s.quicServer = &http3.Server{TLSConfig: config, Addr: addr, Handler: s.wrapWithSvcHeaders(handler)}
+	s.QUIC = NewQUICEndpoint(config, nil)
+	_ = s.RegisterQUICProtocol(NewHTTP3Protocol(s.quicServer))
 	s.Server.Handler = s.wrapWithSvcHeaders(handler)
 	//s.quicServer.Handler=
 	s.Route = handler.Routes
@@ -194,52 +265,90 @@ func NewHttpServer(addr string) *Server {
 	return s
 }
 
-func (s *Server) StartServer() {
-	if s.otherConfig == nil {
-		s.otherConfig = defaultConfig
+// ListenAndServe starts TLS/TCP and the shared QUIC/UDP endpoint. When Addr
+// uses port 0, both transports bind the same chosen port. Cancellation forces
+// closure; use Shutdown with its own deadline for graceful draining instead.
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	pc, err := s.listenPacket()
-	if err != nil {
-		panic(err.Error())
+	if s.QUIC == nil {
+		return errors.New("TLS QUIC endpoint is not configured; use NewServer")
 	}
+	s.lock.Lock()
+	if s.shuttingDown {
+		s.lock.Unlock()
+		return http.ErrServerClosed
+	}
+	if s.started {
+		s.lock.Unlock()
+		return errors.New("server has already been started")
+	}
+	s.started = true
+	s.lock.Unlock()
 	ln, err := s.listen()
 	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	pc, err := net.ListenPacket("udp", ln.Addr().String())
+	if err != nil {
+		return err
+	}
+	defer pc.Close()
+	s.ScheduledTask()
+	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
+	defer stop()
+	results := make(chan error, 2)
+	go func() { results <- s.Serve(ln) }()
+	go func() { results <- s.QUIC.Serve(ctx, pc) }()
+	var errs []error
+	for range 2 {
+		err := <-results
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, ctx.Err()) {
+			errs = append(errs, err)
+			_ = s.Close()
+		}
+	}
+	// Keep UDP open until HTTP/3 GOAWAY and developer protocols finish draining.
+	if len(errs) == 0 {
+		if err := s.QUIC.Shutdown(ctx); err != nil && !errors.Is(err, ctx.Err()) && !errors.Is(err, context.Canceled) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// StartServer preserves the original blocking API and automatic signal
+// handling. Prefer ListenAndServe for explicit lifecycle management.
+func (s *Server) StartServer() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := s.ListenAndServe(ctx); err != nil {
 		panic(err.Error())
 	}
-	go func() {
-		s.Serve(ln)
-	}()
-	s.startFunc()
-	s.ServePacket(pc)
-}
-func (s *Server) startFunc() {
-	s.ScheduledTask()
-	s.closeListener()
 }
 
 func initDefaultServer() *Server {
+	taskCtx, taskCancel := context.WithCancel(context.Background())
 	return &Server{
 		Server:       &http.Server{},
 		generateFunc: defaultSessionImp.NewMemoItemInterFace,
 		Session:      defaultSessionImp.NewServerSession(),
 		otherConfig:  defaultConfig,
+		taskCtx:      taskCtx,
+		taskCancel:   taskCancel,
 	}
 }
 func (s *Server) StartHttpSerer() {
-	//pc, err := s.listenPacket()
-	//if err != nil {
-	//	panic(err.Error())
-	//}
-	//ln, err := s.listen()
-	//if err != nil {
-	//	panic(err.Error())
-	//}
-	//s.Serve(ln)
-	if s.otherConfig == nil {
-		s.otherConfig = defaultConfig
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	stopClose := context.AfterFunc(ctx, func() { _ = s.Close() })
+	defer stopClose()
+	s.ScheduledTask()
+	if err := s.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("HTTP server stopped: %v", err)
 	}
-	s.startFunc()
-	s.Server.ListenAndServe()
 }
 func (s *Server) SetGenerateItemInterFace(generateFunc Session.GenerateItemInterFace) {
 	if generateFunc != nil {

@@ -22,6 +22,9 @@ Language: English | [中文](README_zh.md)
 2. JSON output for request error handling
 3. Support for custom signature certificates
 4. Automatic content injection based on request structure, supporting custom request locations, default values, and parameter renaming
+5. HTTP/3 and developer-defined native QUIC protocols share one UDP port via ALPN dispatch.
+
+Register native protocols with the new `RegisterQUICProtocol` / `QUICProtocolFunc` APIs. Existing public function and interface signatures remain compatible. See the [design, usage and runnable example](docs/native-quic.md) for serving `h3`, `echo/1` and `upper/1` on one endpoint.
 
 ## Quick Start
 
@@ -66,4 +69,4 @@ See main.go for examples
 > v0.2.0 TODO
 1. [ ] SSE protocol support
 2. [ ] WebSocket protocol support
-3. [ ] StreamHttp protocol support 
+3. [ ] StreamHttp protocol support
